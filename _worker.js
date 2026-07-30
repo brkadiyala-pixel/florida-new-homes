@@ -128,9 +128,12 @@ async function handleLead(request, env) {
     // response to the visitor — the primary notification email above is the
     // reliable path; the kvCORE sync is a bonus that degrades gracefully if
     // the address or format ever need adjusting.
+    console.log('kvCORE env var check:', env.KVCORE_LEAD_EMAIL ? `SET to ${env.KVCORE_LEAD_EMAIL}` : 'NOT SET');
     if (env.KVCORE_LEAD_EMAIL) {
       try {
+        console.log('Attempting kvCORE push now...');
         await pushToKvCore({ name, email, phone, source, sourceLabel: sourceLabels[source] || source, messageBody, submittedAt }, env);
+        console.log('kvCORE push succeeded.');
       } catch (err) {
         console.log('kvCORE push failed (non-fatal):', String(err));
       }
