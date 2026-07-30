@@ -30,16 +30,15 @@ Facts you can rely on:
 How to behave:
 - Sound like a private advisor, not a chatbot: warm, unhurried, specific. Sentence case, no exclamation points, no corporate filler.
 - Ask about lifestyle and priorities before jumping to inventory — ocean access, golf, privacy, new construction, timeline — the way a real advisor would before recommending anything.
-- Never invent a specific property address, price, exact listing, or specific pre-construction project name you have not been given — speak in ranges and generalities about the market instead, and offer to connect them with a specialist for exact inventory.
+- IDX/live listings: when the person describes what they're looking for (city, price range, beds, property type), the website will query the real MLS feed via /api/listings and may pass you matching results as JSON. If you receive real listing data, you may reference those specific addresses, prices, and details. If no listing data is provided to you, or the feed is empty for that search, continue to speak in ranges and generalities and offer to connect them with a specialist for exact inventory — never invent a specific address, price, or listing that wasn't given to you.
 - If someone wants to book a consultation, get a valuation, request off-market access, or asks something you can't fully answer, ask for their name and best phone number so a specialist can follow up — do not just say goodbye.
 - Keep replies to 2-4 sentences unless the person asks for more detail.
 - Once the conversation has established genuine buying or selling intent with at least one specific detail (a location, a budget, a property type, or a timeline), end that reply with the exact marker "[CAPTURE_LEAD]" on its own line, after your normal message. Use this at most once per conversation. Never mention this marker to the person or explain what it does — it is a signal for the website, not part of your visible reply.`;
 
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' }
-  });
+function json(body, status = 200, noStore = true) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (noStore) headers['Cache-Control'] = 'no-store';
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 async function handleLead(request, env) {
@@ -196,7 +195,91 @@ async function pushToKvCore(lead, env) {
   }
 }
 
-async function handleConcierge(request, env) {
+/**
+ * Queries BeachesMLS listing data via the Spark® Platform API (FBS/Flexmls
+ * Datamart), the RESO Web API-compliant feed BeachesMLS actually uses —
+ * requested via sparkplatform.com/register/developers, enrolled through
+ * the "BeachesMLS Agent/Broker Licensed Feed – IDX" Datamart plan.
+ *
+ * IMPORTANT — Spark's auth is NOT a simple bearer token. It uses a signed
+ * key/secret exchange that returns a short-lived session token:
+ *   1. Sign a request with your developer key + secret (MD5-based signature
+ *      per Spark's auth docs) to obtain a session token.
+ *   2. Session tokens last up to 24h, with a 1h idle timeout — expired
+ *      tokens must be re-authenticated.
+ *   3. Every data request must include the current session token.
+ * The placeholder below assumes RESO_API_TOKEN is already a valid, current
+ * session token for simplicity — swap in the real key+secret→session-token
+ * exchange (see sparkplatform.com/docs/authentication/spark_api_authentication)
+ * once you're actually enrolled and can see the exact request-signing format
+ * Spark expects. This is the one piece that still needs finishing once your
+ * BeachesMLS enrollment is approved.
+ *
+ * RESO_API_BASE_URL should be the specific resource endpoint Spark gives
+ * you post-approval (typically something under replication.sparkapi.com or
+ * similar — confirm the exact URL in your Datamart enrollment details).
+ */
+async function handleListings(request, env) {
+  if (!env.RESO_API_BASE_URL || !env.RESO_API_TOKEN) {
+    return json({
+      error: 'IDX feed is not configured yet.',
+      detail: 'Set RESO_API_BASE_URL and RESO_API_TOKEN once your BeachesMLS/Spark API enrollment is approved.'
+    }, 501);
+  }
+
+  const url = new URL(request.url);
+  const city = url.searchParams.get('city');
+  const minPrice = url.searchParams.get('minPrice');
+  const maxPrice = url.searchParams.get('maxPrice');
+  const beds = url.searchParams.get('beds');
+  const propertyType = url.searchParams.get('propertyType');
+
+  // Build a RESO Data Dictionary-style OData $filter clause.
+  const filters = [`StandardStatus eq 'Active'`];
+  if (city) filters.push(`City eq '${city.replace(/'/g, "''")}'`);
+  if (minPrice) filters.push(`ListPrice ge ${Number(minPrice)}`);
+  if (maxPrice) filters.push(`ListPrice le ${Number(maxPrice)}`);
+  if (beds) filters.push(`BedroomsTotal ge ${Number(beds)}`);
+  if (propertyType === 'Condominium') filters.push(`PropertyType eq 'Condominium'`);
+  if (propertyType === 'Waterfront') filters.push(`WaterfrontYN eq true`);
+  if (propertyType === 'Golf community') {
+    // No standard MLS field marks "golf community" directly. Best-effort
+    // approximation: match against known golf club subdivision names from
+    // the site's own concierge system prompt. Revisit once real field
+    // names/values come back from Spark — some MLSs expose a cleaner
+    // community/subdivision list that would make this exact rather than
+    // approximate.
+    const golfCommunities = ['Bears Club', 'Admirals Cove', 'Old Palm', "Frenchman's Creek"];
+    const golfFilter = golfCommunities
+      .map(name => `contains(SubdivisionName,'${name.replace(/'/g, "''")}')`)
+      .join(' or ');
+    filters.push(`(${golfFilter})`);
+  }
+
+  const query = new URLSearchParams({
+    '$filter': filters.join(' and '),
+    '$top': '12',
+    '$select': 'ListingKey,UnparsedAddress,City,ListPrice,BedroomsTotal,BathroomsTotalInteger,LivingArea,PropertyType,WaterfrontYN,SubdivisionName,Media'
+  });
+
+  try {
+    const res = await fetch(`${env.RESO_API_BASE_URL}?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${env.RESO_API_TOKEN}` }
+    });
+
+    if (!res.ok) {
+      const detail = await res.text();
+      return json({ error: 'IDX provider rejected the request', detail }, 502);
+    }
+
+    const data = await res.json();
+    return json({ listings: data.value || [] });
+  } catch (err) {
+    return json({ error: 'Unexpected error contacting IDX feed', detail: String(err) }, 500);
+  }
+}
+
+
   if (!env.ANTHROPIC_API_KEY) {
     return json({ error: 'Concierge is not configured yet (missing ANTHROPIC_API_KEY).' }, 500);
   }
@@ -255,6 +338,9 @@ export default {
 
     if (request.method === 'POST' && url.pathname === '/api/lead') {
       return handleLead(request, env);
+    }
+    if (request.method === 'GET' && url.pathname === '/api/listings') {
+      return handleListings(request, env);
     }
     if (request.method === 'POST' && url.pathname === '/api/concierge') {
       return handleConcierge(request, env);

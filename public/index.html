@@ -656,10 +656,16 @@ const tagToScene = { 'Waterfront': 'waterfront', 'Golf community': 'golf', 'New 
 function renderListings(data) {
   const grid = document.getElementById('listing-grid');
   grid.innerHTML = data.map(l => {
-    const img = sceneImage(l.tag);
-    const media = img
-      ? `<div class="photo-block tagged h-52"><img src="${img}" alt="${l.tag} luxury home" class="w-full h-full object-cover"></div>`
-      : `<div class="photo-block h-52" data-tag="${l.tag}">${sceneSVG(tagToScene[l.tag] || 'skyline')}</div>`;
+    let media;
+    if (l.photoUrl) {
+      // Real photo from the IDX feed.
+      media = `<div class="photo-block h-52"><img src="${l.photoUrl}" alt="${l.addr}" class="w-full h-full object-cover"></div>`;
+    } else {
+      const img = sceneImage(l.tag);
+      media = img
+        ? `<div class="photo-block tagged h-52"><img src="${img}" alt="${l.tag} luxury home" class="w-full h-full object-cover"></div>`
+        : `<div class="photo-block h-52" data-tag="${l.tag}">${sceneSVG(tagToScene[l.tag] || 'skyline')}</div>`;
+    }
     return `
     <div class="border border-navy/10 rounded-sm overflow-hidden hover:shadow-lg transition">
       ${media}
@@ -675,23 +681,93 @@ renderListings(listings);
 
 /* =====================================================================
    IDX INTEGRATION POINT
-   Swap the body of this function for a real call to your IDX provider
-   (e.g. Bridge Interactive / RESO Web API, IDX Broker, or SimplyRETS).
-   Example shape:
-     const res = await fetch('https://api.bridgedataoutput.com/api/v2/OData/<mls>/Property?$filter=...', {
-       headers: { Authorization: 'Bearer YOUR_IDX_TOKEN' }
-     });
-     const data = await res.json();
-     renderListings(data.value.map(mapReasoFieldsToCard));
+   Calls the Worker's /api/listings route (see _worker.js), which queries
+   a RESO Web API-compliant feed (Bridge or Trestle, via BeachesMLS/rWorld).
+   Falls back to the mock `listings` array if the feed isn't configured
+   yet (RESO_API_BASE_URL/RESO_API_TOKEN unset) or returns zero results,
+   so the page never breaks while waiting on IDX credentials.
+
+   NOTE on mapping limitations: 'Waterfront' and 'Golf community' are this
+   site's own visual categories, not standard MLS fields. This maps
+   WaterfrontYN (a common RESO Data Dictionary field) to the Waterfront
+   tag when present, and falls back to a generic tag otherwise. Golf
+   community detection isn't reliably available from stock MLS fields —
+   revisit this once you see real field names/values from your vendor,
+   since some MLSs expose a community/subdivision list you could match
+   against a known set of golf community names instead.
    ===================================================================== */
+const priceRangeToMinMax = {
+  'Any price': [null, null],
+  '$2M – $5M': [2000000, 5000000],
+  '$5M – $10M': [5000000, 10000000],
+  '$10M+': [10000000, null]
+};
+const bedsToMin = { 'Any': null, '3+': 3, '4+': 4, '5+': 5 };
+const typeToPropertyType = {
+  'Any type': null,
+  'Waterfront': 'Waterfront',           // backend translates this to WaterfrontYN eq true
+  'Golf community': 'Golf community',   // backend does a best-effort subdivision-name match
+  'New construction': null,             // often needs YearBuilt/NewConstructionYN — adjust once fields are confirmed
+  'Condo': 'Condominium'
+};
+
+function mapResoListingToCard(item) {
+  const priceNum = item.ListPrice || 0;
+  const sqftNum = item.LivingArea || 0;
+  const golfCommunities = ['Bears Club', 'Admirals Cove', 'Old Palm', "Frenchman's Creek"];
+  let tag = 'New construction'; // sensible generic default
+  if (item.WaterfrontYN) tag = 'Waterfront';
+  else if (item.SubdivisionName && golfCommunities.some(name => item.SubdivisionName.includes(name))) tag = 'Golf community';
+  else if (item.PropertyType === 'Condominium') tag = 'Condo';
+  const photo = Array.isArray(item.Media) && item.Media.length ? item.Media[0].MediaURL : null;
+
+  return {
+    tag,
+    price: '$' + priceNum.toLocaleString('en-US'),
+    addr: item.UnparsedAddress ? `${item.UnparsedAddress}, ${item.City || ''}, FL` : (item.City || 'Palm Beach County, FL'),
+    beds: item.BedroomsTotal ?? '—',
+    baths: item.BathroomsTotalInteger ?? '—',
+    sqft: sqftNum ? sqftNum.toLocaleString('en-US') : '—',
+    photoUrl: photo
+  };
+}
+
 async function runIDXSearch() {
   const region = document.getElementById('f-region').value;
   const price = document.getElementById('f-price').value;
   const beds = document.getElementById('f-beds').value;
   const type = document.getElementById('f-type').value;
-  // Placeholder: filters the mock array so the UI is fully wired end to end.
-  const filtered = listings.filter(l => type === 'Any type' || l.tag === type);
-  renderListings(filtered.length ? filtered : listings);
+
+  const [minPrice, maxPrice] = priceRangeToMinMax[price] || [null, null];
+  const bedsMin = bedsToMin[beds] || null;
+  const propertyType = typeToPropertyType[type] || null;
+
+  const params = new URLSearchParams();
+  if (region && region !== 'Any community') params.set('city', region);
+  if (minPrice) params.set('minPrice', minPrice);
+  if (maxPrice) params.set('maxPrice', maxPrice);
+  if (bedsMin) params.set('beds', bedsMin);
+  if (propertyType) params.set('propertyType', propertyType);
+
+  try {
+    const res = await fetch(`/api/listings?${params.toString()}`);
+    const data = await res.json();
+
+    if (res.ok && Array.isArray(data.listings) && data.listings.length) {
+      renderListings(data.listings.map(mapResoListingToCard));
+    } else {
+      // Feed not configured yet, or no matches — fall back to mock data
+      // filtered the same way the old placeholder did, so the page
+      // still feels responsive to the person's search.
+      const filtered = listings.filter(l => type === 'Any type' || l.tag === type);
+      renderListings(filtered.length ? filtered : listings);
+    }
+  } catch (err) {
+    // Network/parse error — same graceful fallback.
+    const filtered = listings.filter(l => type === 'Any type' || l.tag === type);
+    renderListings(filtered.length ? filtered : listings);
+  }
+
   document.getElementById('listing-grid').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
