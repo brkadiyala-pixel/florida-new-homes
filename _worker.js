@@ -279,7 +279,7 @@ async function handleListings(request, env) {
   }
 }
 
-
+async function handleConcierge(request, env) {
   if (!env.ANTHROPIC_API_KEY) {
     return json({ error: 'Concierge is not configured yet (missing ANTHROPIC_API_KEY).' }, 500);
   }
