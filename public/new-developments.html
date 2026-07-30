@@ -102,7 +102,7 @@
 let leadSource = 'buyer';
 function openLeadForm(source) { leadSource = source; document.getElementById('lead-modal').classList.remove('hidden'); }
 async function submitLead() {
-  const lead = { name: document.getElementById('lead-name').value, email: document.getElementById('lead-email').value, phone: document.getElementById('lead-phone').value, source: leadSource, site: 'luxuryredefinedpb.com' };
+  const lead = { name: document.getElementById('lead-name').value, email: document.getElementById('lead-email').value, phone: document.getElementById('lead-phone').value, source: leadSource, site: 'luxuryredefined.homes' };
   const status = document.getElementById('lead-status');
   if (!lead.name || !lead.email) { status.textContent = 'Please enter your name and email.'; return; }
   status.textContent = 'Submitting...';

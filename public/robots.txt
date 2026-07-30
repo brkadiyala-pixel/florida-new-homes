@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://www.luxuryredefinedpb.com/sitemap.xml
+Sitemap: https://www.luxuryredefined.homes/sitemap.xml

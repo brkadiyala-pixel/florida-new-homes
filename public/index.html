@@ -6,13 +6,13 @@
 <title>Luxury Redefined Palm Beach | Palm Beach County Luxury Real Estate</title>
 <meta name="description" content="Discover extraordinary luxury homes across Palm Beach County — waterfront estates, golf community residences, and new construction in Palm Beach, Jupiter, Boca Raton, and Manalapan. List for 3.95% total commission, buyers earn up to 1.5% back at closing.">
 <meta name="keywords" content="Palm Beach luxury real estate, luxury homes Palm Beach County, waterfront estates Palm Beach, Jupiter luxury homes, Boca Raton luxury homes, buyer rebate real estate, list your home 3.95%">
-<link rel="canonical" href="https://www.luxuryredefinedpb.com/">
+<link rel="canonical" href="https://www.luxuryredefined.homes/">
 
 <!-- Open Graph / social preview -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="Luxury Redefined Palm Beach | Palm Beach County Luxury Real Estate">
 <meta property="og:description" content="Extraordinary luxury homes across Palm Beach County. List for 3.95% total commission. Buyers earn up to 1.5% back at closing.">
-<meta property="og:url" content="https://www.luxuryredefinedpb.com/">
+<meta property="og:url" content="https://www.luxuryredefined.homes/">
 
 <!-- Structured data: RealEstateAgent for local SEO -->
 <script type="application/ld+json">
@@ -25,7 +25,7 @@
     "name": "Palm Beach County, FL"
   },
   "priceRange": "$$$$",
-  "url": "https://www.luxuryredefinedpb.com/",
+  "url": "https://www.luxuryredefined.homes/",
   "telephone": "+1-813-550-6772",
   "address": {
     "@type": "PostalAddress",
@@ -977,7 +977,7 @@ async function submitInlineCapture(id) {
     const res = await fetch('/api/lead', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, phone, source: 'concierge-inline', site: 'luxuryredefinedpb.com', message: conversationSummary })
+      body: JSON.stringify({ name, email, phone, source: 'concierge-inline', site: 'luxuryredefined.homes', message: conversationSummary })
     });
     if (!res.ok) throw new Error('failed');
     conciergeLeadCaptured = true;
@@ -1040,7 +1040,7 @@ async function submitLead() {
   const email = document.getElementById('lead-email').value;
   const phone = document.getElementById('lead-phone').value;
   const message = leadSource === 'get-matched' ? wizardMessage : '';
-  const lead = { name, email, phone, source: leadSource, site: 'luxuryredefinedpb.com', message };
+  const lead = { name, email, phone, source: leadSource, site: 'luxuryredefined.homes', message };
   const status = document.getElementById('lead-status');
   if (!lead.name || !lead.email) { status.textContent = 'Please enter your name and email.'; return; }
   status.textContent = 'Submitting...';
