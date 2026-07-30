@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact Us | Luxury Redefined Palm Beach</title>
+<meta name="description" content="Contact Bharath Kadiyala, Broker with Dalton Wade Real Estate Group, for private guidance on Palm Beach County luxury real estate.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    colors: { navy: { DEFAULT: '#0f1720', deep: '#0a0f16', card: '#1a2532', line: '#2a3644' }, gold: { DEFAULT: '#c9a86a', light: '#e8d9b8', dim: '#8b7847' }, sand: '#f4ede1' },
+    fontFamily: { serif: ['Playfair Display', 'serif'], sans: ['Inter', 'sans-serif'] }
+  } } }
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; }
+  h1, h2, h3, .font-serif { font-family: 'Playfair Display', serif; }
+</style>
+</head>
+<body class="bg-[#f8f6f1] text-navy">
+
+<nav class="fixed top-0 w-full z-50 bg-navy-deep/95 backdrop-blur border-b border-navy-line">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <a href="index.html" class="flex items-center gap-3">
+      <img src="DaltonWade_Logo.png" alt="Dalton Wade Real Estate Group" class="h-12 w-auto bg-white rounded-sm px-2 py-1.5">
+      <div>
+        <p class="font-serif text-gold text-lg tracking-wide leading-none">Luxury Redefined</p>
+        <p class="text-xs text-sand/70 tracking-[0.15em] mt-1">PALM BEACH · DALTON WADE REAL ESTATE GROUP</p>
+      </div>
+    </a>
+    <div class="hidden md:flex items-center gap-7 text-sm text-sand/80">
+      <a href="index.html#search" class="hover:text-gold transition">Search</a>
+      <a href="index.html#regions" class="hover:text-gold transition">Communities</a>
+      <a href="clubs.html" class="hover:text-gold transition">Private clubs</a>
+      <a href="new-developments.html" class="hover:text-gold transition">New developments</a>
+      <a href="index.html#insights" class="hover:text-gold transition">Insights</a>
+      <a href="about.html" class="hover:text-gold transition">About</a>
+      <a href="contact.html" class="text-gold transition">Contact</a>
+    </div>
+    <a href="tel:8135506772" class="text-sm text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold hover:text-navy transition">(813) 550-6772</a>
+  </div>
+</nav>
+
+<header class="pt-32 pb-14 px-6 bg-navy-deep">
+  <div class="max-w-3xl mx-auto">
+    <p class="text-gold text-xs tracking-[0.25em] uppercase mb-3">Get in touch</p>
+    <h1 class="font-serif text-5xl text-sand mb-4">Let's talk about your move</h1>
+    <p class="text-sand/70 text-lg max-w-2xl leading-relaxed">Whether you're buying, selling, or just starting to explore Palm Beach County, reach out directly — a real person reads every message.</p>
+  </div>
+</header>
+
+<section class="max-w-3xl mx-auto px-6 py-16">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+
+    <!-- Contact form -->
+    <div>
+      <h2 class="font-serif text-2xl mb-5">Send a message</h2>
+      <div id="contact-form-view" class="space-y-3">
+        <input id="contact-name" type="text" placeholder="Full name" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
+        <input id="contact-email" type="email" placeholder="Email address" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
+        <input id="contact-phone" type="tel" placeholder="Phone number" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
+
+        <label class="block text-xs text-navy/50 uppercase tracking-wide pt-1">How did you hear about us?</label>
+        <select id="contact-referral" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold bg-white">
+          <option value="">Select one (optional)</option>
+          <option value="instagram">Instagram</option>
+          <option value="facebook">Facebook</option>
+          <option value="tiktok">TikTok</option>
+          <option value="youtube">YouTube</option>
+          <option value="linkedin">LinkedIn</option>
+          <option value="google">Google search</option>
+          <option value="referral">Referral from a friend/client</option>
+          <option value="other">Other</option>
+        </select>
+
+        <textarea id="contact-message" rows="4" placeholder="Tell us what you're looking for..." class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold resize-none"></textarea>
+
+        <p class="text-xs text-navy/40 leading-snug">By submitting, you consent to be contacted by Bharath Kadiyala / Dalton Wade Real Estate Group by phone, text, and email regarding your real estate inquiry, including by automated means. Consent is not a condition of purchase. See our <a href="legal/privacy-policy.html" class="underline hover:text-gold-dim" target="_blank">Privacy Policy</a>.</p>
+
+        <button onclick="submitContact()" class="w-full bg-navy text-sand py-3 rounded-sm text-sm font-medium hover:bg-navy-card transition">Send message</button>
+        <p id="contact-status" class="text-xs text-navy/50 text-center"></p>
+      </div>
+
+      <div id="contact-confirm-view" class="hidden bg-sand rounded-sm p-6">
+        <div class="w-12 h-12 rounded-full bg-gold/20 flex items-center justify-center mb-4">
+          <span class="text-gold-dim text-2xl">✓</span>
+        </div>
+        <h3 class="font-serif text-xl mb-2">Thank you, <span id="c-confirm-name"></span></h3>
+        <p class="text-sm text-navy/60 mb-4">We'll be in touch shortly. Here's what we received:</p>
+        <div class="bg-white/60 rounded-sm p-4 space-y-2 text-sm">
+          <p><span class="text-navy/50">Name:</span> <span id="c-confirm-name-2" class="text-navy"></span></p>
+          <p><span class="text-navy/50">Email:</span> <span id="c-confirm-email" class="text-navy"></span></p>
+          <p id="c-confirm-phone-row"><span class="text-navy/50">Phone:</span> <span id="c-confirm-phone" class="text-navy"></span></p>
+          <p id="c-confirm-message-row" class="hidden pt-1 border-t border-navy/10"><span class="text-navy/50 block mb-1">Message:</span><span id="c-confirm-message" class="text-navy"></span></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Direct contact + social -->
+    <div>
+      <h2 class="font-serif text-2xl mb-5">Direct contact</h2>
+      <div class="bg-sand rounded-sm p-6 mb-6">
+        <p class="font-serif text-xl mb-1">Bharath Kadiyala</p>
+        <p class="text-navy/60 text-sm mb-1">Broker · License #BK3462426</p>
+        <p class="text-navy/50 text-xs mb-4">Dalton Wade Real Estate Group · Florida Firm License #CQ1047837</p>
+        <p class="text-sm mb-1"><i class="ti ti-phone text-gold-dim mr-2" aria-hidden="true"></i><a href="tel:8135506772" class="hover:text-gold-dim">(813) 550-6772</a></p>
+        <p class="text-sm mb-1"><i class="ti ti-mail text-gold-dim mr-2" aria-hidden="true"></i><a href="mailto:brkadiyala@gmail.com" class="hover:text-gold-dim">brkadiyala@gmail.com</a></p>
+        <p class="text-sm"><i class="ti ti-map-pin text-gold-dim mr-2" aria-hidden="true"></i>1st Ave S, Ste 200, St. Petersburg, FL 33701</p>
+      </div>
+
+      <h2 class="font-serif text-xl mb-3">Follow along</h2>
+      <div class="flex gap-3">
+        <a href="#" aria-label="Instagram" class="w-11 h-11 rounded-full bg-navy-deep text-sand flex items-center justify-center hover:bg-gold hover:text-navy transition"><i class="ti ti-brand-instagram text-lg" aria-hidden="true"></i></a>
+        <a href="#" aria-label="Facebook" class="w-11 h-11 rounded-full bg-navy-deep text-sand flex items-center justify-center hover:bg-gold hover:text-navy transition"><i class="ti ti-brand-facebook text-lg" aria-hidden="true"></i></a>
+        <a href="#" aria-label="TikTok" class="w-11 h-11 rounded-full bg-navy-deep text-sand flex items-center justify-center hover:bg-gold hover:text-navy transition"><i class="ti ti-brand-tiktok text-lg" aria-hidden="true"></i></a>
+        <a href="#" aria-label="YouTube" class="w-11 h-11 rounded-full bg-navy-deep text-sand flex items-center justify-center hover:bg-gold hover:text-navy transition"><i class="ti ti-brand-youtube text-lg" aria-hidden="true"></i></a>
+        <a href="#" aria-label="LinkedIn" class="w-11 h-11 rounded-full bg-navy-deep text-sand flex items-center justify-center hover:bg-gold hover:text-navy transition"><i class="ti ti-brand-linkedin text-lg" aria-hidden="true"></i></a>
+      </div>
+      <p class="text-xs text-navy/40 mt-3">Social links are placeholders — swap in your real profile URLs before launch.</p>
+    </div>
+  </div>
+</section>
+
+<footer class="bg-navy-deep text-sand/70 px-6 py-14">
+  <div class="max-w-7xl mx-auto">
+    <img src="DaltonWade_Logo.png" alt="Dalton Wade Real Estate Group" class="h-9 w-auto bg-white rounded-sm px-2 py-1.5 mb-4">
+    <p class="text-sm text-sand/80">Bharath Kadiyala, Broker &nbsp;·&nbsp; License #BK3462426 &nbsp;·&nbsp; Dalton Wade Real Estate Group, Florida Firm License #CQ1047837</p>
+    <p class="text-sm text-sand/60 mt-1">1st Ave S, Ste 200, St. Petersburg, FL 33701 &nbsp;·&nbsp; Office: (888) 668-8283</p>
+    <p class="text-xs text-sand/40 mt-3 max-w-2xl">"Luxury Redefined Palm Beach" is a marketing name operated by licensed agents of Dalton Wade Real Estate Group Equal Housing Opportunity.</p>
+    <div class="flex flex-wrap gap-4 mt-4 text-xs text-sand/40">
+      <a href="legal/privacy-policy.html" class="hover:text-gold">Privacy Policy</a>
+      <a href="legal/terms-of-use.html" class="hover:text-gold">Terms of Use</a>
+      <a href="legal/fair-housing.html" class="hover:text-gold">Fair Housing</a>
+      <a href="legal/accessibility.html" class="hover:text-gold">Accessibility</a>
+    </div>
+    <p class="text-xs text-sand/30 mt-6">© 2026 Luxury Redefined Palm Beach. All rights reserved.</p>
+  </div>
+</footer>
+
+<script>
+/* Capture social-funnel source from URL params (e.g. a link shared on
+   Instagram tagged ?utm_source=instagram) and pre-select the referral
+   dropdown so leads from social campaigns are tagged automatically. */
+(function captureSource() {
+  const params = new URLSearchParams(window.location.search);
+  const source = (params.get('utm_source') || params.get('source') || '').toLowerCase();
+  const known = ['instagram', 'facebook', 'tiktok', 'youtube', 'linkedin', 'google'];
+  if (known.includes(source)) {
+    const select = document.getElementById('contact-referral');
+    if (select) select.value = source;
+  }
+})();
+
+async function submitContact() {
+  const name = document.getElementById('contact-name').value;
+  const email = document.getElementById('contact-email').value;
+  const phone = document.getElementById('contact-phone').value;
+  const message = document.getElementById('contact-message').value;
+  const lead = {
+    name, email, phone,
+    source: 'contact-page',
+    site: 'luxuryredefined.homes',
+    referral: document.getElementById('contact-referral').value,
+    message
+  };
+  const status = document.getElementById('contact-status');
+  if (!lead.name || !lead.email) { status.textContent = 'Please enter your name and email.'; return; }
+  status.textContent = 'Sending...';
+  try {
+    const res = await fetch('/api/lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(lead)
+    });
+    if (!res.ok) throw new Error('failed');
+
+    const firstName = name.trim().split(' ')[0];
+    document.getElementById('c-confirm-name').textContent = firstName;
+    document.getElementById('c-confirm-name-2').textContent = name;
+    document.getElementById('c-confirm-email').textContent = email;
+    if (phone) {
+      document.getElementById('c-confirm-phone').textContent = phone;
+      document.getElementById('c-confirm-phone-row').classList.remove('hidden');
+    } else {
+      document.getElementById('c-confirm-phone-row').classList.add('hidden');
+    }
+    if (message) {
+      document.getElementById('c-confirm-message').textContent = message;
+      document.getElementById('c-confirm-message-row').classList.remove('hidden');
+    } else {
+      document.getElementById('c-confirm-message-row').classList.add('hidden');
+    }
+    document.getElementById('contact-form-view').classList.add('hidden');
+    document.getElementById('contact-confirm-view').classList.remove('hidden');
+  } catch (e) {
+    status.textContent = "Something went wrong. Please call (813) 550-6772.";
+  }
+}
+</script>
+</body>
+</html>
