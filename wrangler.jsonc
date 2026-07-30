@@ -12,5 +12,8 @@
   },
   "compatibility_flags": [
     "nodejs_compat"
-  ]
+  ],
+  "vars": {
+    "KVCORE_LEAD_EMAIL": "leads+daltonwaderealestategroup11662-a-2088722@kvcore.com"
+  }
 }
