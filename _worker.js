@@ -147,25 +147,33 @@ async function handleLead(request, env) {
 
 /* Sends a new lead straight to kvCORE (BoldTrail) using its built-in
    email-to-lead address (found in kvCORE under Lead Engine > Lead Dropbox
-   > Creating New Leads). kvCORE parses the email body into a contact
-   automatically, so the format below sticks to plain labeled lines
-   (Name / Email / Phone / Message) rather than a custom JSON structure —
-   that's what kvCORE's parser is built to read. No Zapier, no field-by-field
-   mapping, no dropdown IDs to get wrong. If kvCORE ever stops picking up
-   these emails correctly, check the exact label wording their parser
-   expects on that same settings page and adjust the `text` below to match. */
+   > Creating New Leads). kvCORE's parser requires a strict template:
+   - Subject line MUST literally say "Add Contact"
+   - Fields must be labeled First Name / Last Name / Email / Phone /
+     Deal Type, each on its own line
+   Deviating from this format (as an earlier version of this code did)
+   causes the email to deliver successfully but get silently dropped by
+   kvCORE's parser — no error, no contact created. If kvCORE ever changes
+   this template, check BoldTrail's help article "Lead Dropbox Email
+   Import Template" for the current required format. */
 async function pushToKvCore(lead, env) {
-  const subject = `New website lead — ${lead.name}`;
+  const [firstName, ...rest] = lead.name.trim().split(' ');
+  const lastName = rest.join(' ') || '-';
+
+  // kvCORE's Deal Type field expects Buyer or Seller specifically.
+  const dealType = lead.source === 'seller' ? 'Seller' : 'Buyer';
+
+  const subject = 'Add Contact';
 
   const text = [
-    `Name: ${lead.name}`,
+    `First Name: ${firstName}`,
+    `Last Name: ${lastName}`,
     `Email: ${lead.email}`,
     `Phone: ${lead.phone && lead.phone !== 'Not provided' ? lead.phone : ''}`,
+    `Deal Type: ${dealType}`,
     `Source: Luxury Redefined Palm Beach website`,
-    `Lead type/notes: ${lead.sourceLabel || lead.source}`,
-    lead.messageBody ? `Message: ${lead.messageBody}` : null,
-    `Submitted: ${lead.submittedAt}`
-  ].filter(line => line !== null).join('\n');
+    `Notes: ${lead.sourceLabel || lead.source}${lead.messageBody ? ' — ' + lead.messageBody : ''}`
+  ].join('\n');
 
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
