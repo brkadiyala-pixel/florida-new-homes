@@ -124,15 +124,15 @@ async function handleLead(request, env) {
       return json({ error: 'Email provider rejected the request', detail }, 502);
     }
 
-    // Push to BoldTrail too, if configured. This never blocks or fails the
-    // response to the visitor — email is the reliable path; BoldTrail sync
-    // is a bonus that degrades gracefully if the token or endpoint ever
-    // need adjusting.
-    if (env.BOLDTRAIL_API_TOKEN) {
+    // Push to kvCORE too, if configured. This never blocks or fails the
+    // response to the visitor — the primary notification email above is the
+    // reliable path; the kvCORE sync is a bonus that degrades gracefully if
+    // the address or format ever need adjusting.
+    if (env.KVCORE_LEAD_EMAIL) {
       try {
-        await pushToBoldTrail({ name, email, phone, source, sourceLabel: sourceLabels[source] || source, messageBody }, env);
+        await pushToKvCore({ name, email, phone, source, sourceLabel: sourceLabels[source] || source, messageBody, submittedAt }, env);
       } catch (err) {
-        console.log('BoldTrail push failed (non-fatal):', String(err));
+        console.log('kvCORE push failed (non-fatal):', String(err));
       }
     }
 
@@ -142,37 +142,46 @@ async function handleLead(request, env) {
   }
 }
 
-/* Pushes a new contact into BoldTrail (formerly kvCORE) using the vendor
-   API token generated from Lead Engine > Lead Dropbox > My API Tokens.
-   Built against the standard pattern used by other BoldTrail vendor
-   integrations (Listings-to-Leads, myPlusLeads, API Nation) since
-   BoldTrail's own Postman docs are JS-rendered and not directly
-   inspectable here. If BoldTrail ever changes their schema, this is the
-   one place to adjust — check the response detail logged above first. */
-async function pushToBoldTrail(lead, env) {
-  const [firstName, ...rest] = lead.name.trim().split(' ');
-  const lastName = rest.join(' ') || '-';
+/* Sends a new lead straight to kvCORE (BoldTrail) using its built-in
+   email-to-lead address (found in kvCORE under Lead Engine > Lead Dropbox
+   > Creating New Leads). kvCORE parses the email body into a contact
+   automatically, so the format below sticks to plain labeled lines
+   (Name / Email / Phone / Message) rather than a custom JSON structure —
+   that's what kvCORE's parser is built to read. No Zapier, no field-by-field
+   mapping, no dropdown IDs to get wrong. If kvCORE ever stops picking up
+   these emails correctly, check the exact label wording their parser
+   expects on that same settings page and adjust the `text` below to match. */
+async function pushToKvCore(lead, env) {
+  const subject = `New website lead — ${lead.name}`;
 
-  const res = await fetch('https://api.kvcore.com/v2/public/contacts', {
+  const text = [
+    `Name: ${lead.name}`,
+    `Email: ${lead.email}`,
+    `Phone: ${lead.phone && lead.phone !== 'Not provided' ? lead.phone : ''}`,
+    `Source: Luxury Redefined Palm Beach website`,
+    `Lead type/notes: ${lead.sourceLabel || lead.source}`,
+    lead.messageBody ? `Message: ${lead.messageBody}` : null,
+    `Submitted: ${lead.submittedAt}`
+  ].filter(line => line !== null).join('\n');
+
+  const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${env.BOLDTRAIL_API_TOKEN}`,
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      first_name: firstName,
-      last_name: lastName,
-      email: lead.email,
-      phone: lead.phone && lead.phone !== 'Not provided' ? lead.phone : undefined,
-      source: 'Luxury Redefined Palm Beach website',
-      tags: [lead.source, 'website-lead'],
-      notes: [lead.sourceLabel, lead.messageBody].filter(Boolean).join('\n\n')
+      from: env.FROM_EMAIL || 'Luxury Redefined <leads@luxuryredefined.homes>',
+      to: [env.KVCORE_LEAD_EMAIL],
+      reply_to: lead.email,
+      subject,
+      text
     })
   });
 
   if (!res.ok) {
     const detail = await res.text();
-    throw new Error(`BoldTrail rejected the request (${res.status}): ${detail}`);
+    throw new Error(`kvCORE email push rejected (${res.status}): ${detail}`);
   }
 }
 
@@ -244,4 +253,3 @@ export default {
     return env.ASSETS.fetch(request);
   }
 };
-
