@@ -176,15 +176,15 @@
       </div>
       <p class="text-sand/70 text-sm mt-4 mb-4 leading-relaxed">Welcome. What would make your next Florida home exceptional? Tell me the location, lifestyle, or price range you're considering.</p>
 
+      <input id="chat-input" type="hidden">
+      <div id="chat-log" class="space-y-3 mb-3 max-h-56 overflow-y-auto pr-1 empty:hidden"></div>
+
       <div class="flex gap-2 mb-5">
         <input id="quick-search-input" type="text" placeholder="Describe your ideal Florida home..."
           class="flex-1 bg-navy-card border border-gold/30 rounded-full px-4 py-3 text-sand text-sm focus:outline-none focus:border-gold"
           onkeydown="if(event.key==='Enter') quickSearch()">
         <button onclick="quickSearch()" aria-label="Search" class="w-11 h-11 shrink-0 rounded-full bg-gold text-navy flex items-center justify-center hover:bg-gold-light transition text-lg">→</button>
       </div>
-
-      <input id="chat-input" type="hidden">
-      <div id="chat-log" class="space-y-3 mb-1 max-h-56 overflow-y-auto pr-1 empty:hidden"></div>
 
       <p class="text-sand/40 text-xs mt-4 mb-4">Or let me guide you:</p>
 
