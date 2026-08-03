@@ -671,7 +671,14 @@ async function runMarketReportJob(env) {
     }
 
     const data = await res.json();
-    const draft = (data.content || []).map(b => (b.type === 'text' ? b.text : '')).join('\n').trim();
+    // Join with '' (not '\n'): when the web search tool is used, Claude's
+    // response often arrives as several separate 'text' blocks split around
+    // citation boundaries. Joining with a newline was inserting fake
+    // paragraph breaks mid-sentence at every citation. The blocks are meant
+    // to be concatenated directly to reconstruct the original flowing text;
+    // any real paragraph breaks the model intended are already present as
+    // '\n\n' inside the block text itself.
+    const draft = (data.content || []).map(b => (b.type === 'text' ? b.text : '')).join('').trim();
     const sections = parseReportSections(draft);
 
     if (!sections.length) {
