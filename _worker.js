@@ -657,7 +657,7 @@ async function runMarketReportJob(env) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 2000,
+        max_tokens: 4096,
         system: MARKET_REPORT_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: `Write this month's report: ${monthLabel}.` }],
         tools: [{ type: 'web_search_20250305', name: 'web_search' }]
@@ -679,6 +679,25 @@ async function runMarketReportJob(env) {
     // any real paragraph breaks the model intended are already present as
     // '\n\n' inside the block text itself.
     const draft = (data.content || []).map(b => (b.type === 'text' ? b.text : '')).join('').trim();
+
+    if (!draft) {
+      // No text content came back at all — most likely max_tokens was hit
+      // while Claude was still searching/reading results, before it wrote
+      // any final text. Surface stop_reason and the block types actually
+      // returned, so this is diagnosable from the JSON response alone
+      // rather than needing to dig through Worker logs.
+      const blockTypes = (data.content || []).map(b => b.type);
+      return {
+        ok: false,
+        error: 'AI returned no text content',
+        stopReason: data.stop_reason,
+        blockTypes,
+        hint: data.stop_reason === 'max_tokens'
+          ? 'Hit the token limit before writing any text — try increasing max_tokens further.'
+          : 'Unexpected — check blockTypes and stopReason above.'
+      };
+    }
+
     const sections = parseReportSections(draft);
 
     if (!sections.length) {
