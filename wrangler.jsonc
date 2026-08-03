@@ -13,6 +13,9 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
+  "triggers": {
+    "crons": ["0 13 1 * *", "0 13 * * 1"]
+  },
   "vars": {
     "KVCORE_LEAD_EMAIL": "leads+daltonwaderealestategroup11662-a-2088722@kvcore.com"
   }

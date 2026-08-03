@@ -45,6 +45,32 @@ function json(body, status = 200, noStore = true) {
   return new Response(JSON.stringify(body), { status, headers });
 }
 
+/* Simple HTTP Basic Auth gate for the internal content-agent tools below
+   (listing description writer admin form + its API). Username can be
+   anything; only the password is checked, against the ADMIN_PASSWORD
+   secret. Browsers cache Basic Auth credentials per-origin after the first
+   successful prompt, so the admin form's fetch() calls don't need to
+   re-send credentials manually. */
+function checkAdminAuth(request, env) {
+  if (!env.ADMIN_PASSWORD) return false;
+  const auth = request.headers.get('Authorization') || '';
+  if (!auth.startsWith('Basic ')) return false;
+  try {
+    const decoded = atob(auth.slice(6));
+    const password = decoded.split(':').slice(1).join(':');
+    return password === env.ADMIN_PASSWORD;
+  } catch {
+    return false;
+  }
+}
+
+function requireAdminAuth() {
+  return new Response('Authentication required.', {
+    status: 401,
+    headers: { 'WWW-Authenticate': 'Basic realm="Luxury Redefined admin tools"' }
+  });
+}
+
 async function handleLead(request, env) {
   let lead;
   try {
@@ -283,6 +309,330 @@ async function handleListings(request, env) {
   }
 }
 
+/* =====================================================================
+   CONTENT & MARKETING AGENTS
+   Three internal tools that reuse the same ANTHROPIC_API_KEY and
+   RESEND_API_KEY already configured for the concierge and lead emails:
+     1. Listing Description Writer — admin form, triggered on demand
+     2. Market Report Generator     — runs monthly via Cron Trigger
+     3. Social Post Generator       — runs weekly via Cron Trigger
+   None of these publish to the live site automatically — every one
+   emails a draft to LEAD_EMAIL for a human to review first.
+   ===================================================================== */
+
+const LISTING_COPY_SYSTEM_PROMPT = `You write real estate copy for "Luxury Redefined Palm Beach," a private, high-touch brokerage (Dalton Wade Real Estate Group). Voice: warm, unhurried, specific — sentence case, no exclamation points, no corporate filler, never generic ("stunning," "must-see," "won't last").
+
+Respond with ONLY a JSON object, no markdown fences, no commentary, in exactly this shape:
+{"mlsDescription": "...", "socialCaption": "..."}
+
+- mlsDescription: 150-200 words, MLS-ready. Lead with the single most distinctive feature, then move through the property's story (setting, architecture, standout rooms/features), close with a line about the lifestyle or location. Do not invent features not given to you.
+- socialCaption: 40-60 words for Instagram/Facebook. Punchier and more visual than the MLS copy, still zero exclamation points, ends with 3-5 relevant real estate hashtags (e.g. #PalmBeachRealEstate, #LuxuryHomes, plus one for the specific city/community given).`;
+
+async function handleListingDescription(request, env) {
+  if (!checkAdminAuth(request, env)) return requireAdminAuth();
+  if (!env.ANTHROPIC_API_KEY) {
+    return json({ error: 'Not configured yet (missing ANTHROPIC_API_KEY).' }, 500);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Invalid request body' }, 400);
+  }
+
+  const address = String(body.address || '').slice(0, 200);
+  const price = String(body.price || '').slice(0, 60);
+  const beds = String(body.beds || '').slice(0, 20);
+  const baths = String(body.baths || '').slice(0, 20);
+  const sqft = String(body.sqft || '').slice(0, 20);
+  const tag = String(body.tag || '').slice(0, 60);
+  const features = String(body.features || '').slice(0, 2000);
+
+  if (!address || !price) {
+    return json({ error: 'Address and price are required.' }, 400);
+  }
+
+  const userPrompt = `Write copy for this listing:
+Address: ${address}
+Price: ${price}
+Beds: ${beds || 'not given'}
+Baths: ${baths || 'not given'}
+Square footage: ${sqft || 'not given'}
+Category: ${tag || 'not given'}
+Notable features: ${features || 'none given beyond the above'}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 800,
+        system: LISTING_COPY_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userPrompt }]
+      })
+    });
+
+    if (!res.ok) {
+      const detail = await res.text();
+      return json({ error: 'AI request failed', detail }, 502);
+    }
+
+    const data = await res.json();
+    const raw = (data.content || []).map(b => (b.type === 'text' ? b.text : '')).join('').trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ''));
+    } catch {
+      return json({ error: 'Could not parse AI response', raw }, 502);
+    }
+
+    // Email the draft for review — this never blocks returning the result
+    // to the admin page itself.
+    if (env.RESEND_API_KEY) {
+      const toAddress = env.LEAD_EMAIL || 'brkadiyala@gmail.com';
+      const fromAddress = env.FROM_EMAIL || 'Luxury Redefined <leads@luxuryredefined.homes>';
+      const text = [
+        `Listing description draft — ${address}`,
+        ``,
+        `MLS DESCRIPTION:`,
+        parsed.mlsDescription,
+        ``,
+        `SOCIAL CAPTION:`,
+        parsed.socialCaption,
+        ``,
+        `— Generated by the listing description writer. Review before publishing.`
+      ].join('\n');
+
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ from: fromAddress, to: [toAddress], subject: `Listing description ready — ${address}`, text })
+        });
+      } catch (err) {
+        console.log('Listing description email failed (non-fatal):', String(err));
+      }
+    }
+
+    return json({ ok: true, ...parsed });
+  } catch (err) {
+    return json({ error: 'Unexpected error contacting the AI service', detail: String(err) }, 500);
+  }
+}
+
+function adminListingFormPage() {
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Listing Description Writer</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; color: #0f1720; }
+  h1 { font-size: 22px; }
+  label { display: block; margin-top: 14px; font-size: 13px; font-weight: 600; }
+  input, textarea, select { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
+  textarea { min-height: 90px; }
+  button { margin-top: 20px; background: #c9a86a; color: #0f1720; border: none; padding: 10px 20px; border-radius: 4px; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: 0.6; cursor: default; }
+  #result { margin-top: 24px; white-space: pre-wrap; background: #f4ede1; padding: 16px; border-radius: 4px; display: none; }
+  #status { margin-top: 10px; font-size: 13px; color: #666; }
+</style></head>
+<body>
+  <h1>Listing Description Writer</h1>
+  <p style="color:#666; font-size:13px;">Fill in what you have — the draft also gets emailed to you automatically.</p>
+  <label>Address *</label><input id="address" placeholder="1230 N Ocean Blvd, Palm Beach, FL">
+  <label>Price *</label><input id="price" placeholder="$18,750,000">
+  <label>Category</label>
+  <select id="tag"><option value="">—</option><option>Waterfront</option><option>Golf community</option><option>New construction</option><option>Condo</option></select>
+  <label>Beds</label><input id="beds" placeholder="6">
+  <label>Baths</label><input id="baths" placeholder="7.5">
+  <label>Square footage</label><input id="sqft" placeholder="7,200">
+  <label>Notable features</label><textarea id="features" placeholder="Private dock, wine cellar, resort-style pool, impact glass throughout..."></textarea>
+  <button id="submitBtn" onclick="submitListing()">Generate description</button>
+  <div id="status"></div>
+  <div id="result"></div>
+<script>
+async function submitListing() {
+  const btn = document.getElementById('submitBtn');
+  const status = document.getElementById('status');
+  const result = document.getElementById('result');
+  const address = document.getElementById('address').value.trim();
+  const price = document.getElementById('price').value.trim();
+  if (!address || !price) { status.textContent = 'Address and price are required.'; return; }
+  btn.disabled = true; status.textContent = 'Generating...'; result.style.display = 'none';
+  try {
+    const res = await fetch('/api/agent/listing-description', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        address, price,
+        tag: document.getElementById('tag').value,
+        beds: document.getElementById('beds').value,
+        baths: document.getElementById('baths').value,
+        sqft: document.getElementById('sqft').value,
+        features: document.getElementById('features').value
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) { status.textContent = data.error || 'Something went wrong.'; btn.disabled = false; return; }
+    status.textContent = 'Done — also emailed to you.';
+    result.style.display = 'block';
+    result.textContent = 'MLS DESCRIPTION:\\n' + data.mlsDescription + '\\n\\nSOCIAL CAPTION:\\n' + data.socialCaption;
+  } catch (e) {
+    status.textContent = 'Network error — please try again.';
+  }
+  btn.disabled = false;
+}
+</script>
+</body></html>`;
+}
+
+const MARKET_REPORT_SYSTEM_PROMPT = `You write the "Palm Beach County luxury real estate insights" market report for "Luxury Redefined Palm Beach," a private brokerage (Dalton Wade Real Estate Group). Voice: measured, specific, sentence case, no exclamation points — an experienced advisor briefing a client, not a hype-driven market newsletter.
+
+Use web search to find current news and data on the Palm Beach County (and nearby South Florida) luxury real estate market — inventory levels, notable sales, interest rate context, migration trends, new development activity.
+
+Write a report with this structure (use ## for section headers):
+## Where the market stands
+## What's moving
+## What to watch
+
+400-600 words total. Cite what you found in your own words (no direct quotes). End with exactly this line on its own, verbatim: "Note: this draft was AI-researched from public sources and has not been verified against BeachesMLS data — confirm figures before publishing."`;
+
+async function runMarketReportJob(env) {
+  if (!env.ANTHROPIC_API_KEY || !env.RESEND_API_KEY) {
+    console.log('Market report job skipped: missing ANTHROPIC_API_KEY or RESEND_API_KEY');
+    return;
+  }
+
+  const monthLabel = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'America/New_York' });
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 2000,
+        system: MARKET_REPORT_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: `Write this month's report: ${monthLabel}.` }],
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }]
+      })
+    });
+
+    if (!res.ok) {
+      console.log('Market report job: AI request failed', await res.text());
+      return;
+    }
+
+    const data = await res.json();
+    const draft = (data.content || []).map(b => (b.type === 'text' ? b.text : '')).join('\n').trim();
+
+    const toAddress = env.LEAD_EMAIL || 'brkadiyala@gmail.com';
+    const fromAddress = env.FROM_EMAIL || 'Luxury Redefined <leads@luxuryredefined.homes>';
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: fromAddress,
+        to: [toAddress],
+        subject: `Market report draft — ${monthLabel} (review before publishing)`,
+        text: draft || 'No content was generated — check the Worker logs.'
+      })
+    });
+  } catch (err) {
+    console.log('Market report job failed:', String(err));
+  }
+}
+
+/* Hardcoded snapshot of current listings + insight articles for the
+   social post generator. This duplicates the \`listings\` array and the
+   insight cards in index.html, since there's no shared data store (KV/D1)
+   yet — once the real IDX feed is live via handleListings(), swap this
+   for a live query instead of hand-maintaining this list. */
+const CURRENT_CONTENT_SNAPSHOT = [
+  { type: 'listing', tag: 'Waterfront', price: '$18,750,000', addr: '1230 N Ocean Blvd, Palm Beach, FL' },
+  { type: 'listing', tag: 'Golf community', price: '$6,950,000', addr: '215 Bears Club Dr, Jupiter, FL' },
+  { type: 'listing', tag: 'New construction', price: '$9,995,000', addr: '3107 S Ocean Blvd, Highland Beach, FL' },
+  { type: 'insight', title: 'Palm Beach County Luxury Market Report — Spring 2026' },
+  { type: 'insight', title: "Jupiter vs. Boca Raton: choosing your community" },
+  { type: 'insight', title: 'The new era of Palm Beach luxury home design' }
+];
+
+const SOCIAL_POST_SYSTEM_PROMPT = `You write Instagram/Facebook captions for "Luxury Redefined Palm Beach," a private brokerage (Dalton Wade Real Estate Group). Voice: warm, confident, sentence case, no exclamation points, no corporate filler.
+
+For each item given, write one caption, 40-60 words, ending with 3-5 relevant hashtags. Respond with ONLY a JSON array, no markdown fences, no commentary, in this shape:
+[{"item": "<repeat the address or title given>", "caption": "..."}]`;
+
+async function runSocialPostJob(env) {
+  if (!env.ANTHROPIC_API_KEY || !env.RESEND_API_KEY) {
+    console.log('Social post job skipped: missing ANTHROPIC_API_KEY or RESEND_API_KEY');
+    return;
+  }
+
+  const itemsList = CURRENT_CONTENT_SNAPSHOT
+    .map(i => i.type === 'listing' ? `Listing (${i.tag}): ${i.addr}, ${i.price}` : `Article: ${i.title}`)
+    .join('\n');
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 1200,
+        system: SOCIAL_POST_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: itemsList }]
+      })
+    });
+
+    if (!res.ok) {
+      console.log('Social post job: AI request failed', await res.text());
+      return;
+    }
+
+    const data = await res.json();
+    const raw = (data.content || []).map(b => (b.type === 'text' ? b.text : '')).join('').trim();
+
+    let captions;
+    try {
+      captions = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ''));
+    } catch {
+      console.log('Social post job: could not parse AI response:', raw);
+      return;
+    }
+
+    const weekLabel = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+    const text = [
+      `This week's social captions (week of ${weekLabel})`,
+      `Reminder: this pulls from a hardcoded listings snapshot in _worker.js, not a live feed — update CURRENT_CONTENT_SNAPSHOT once IDX is connected.`,
+      ``,
+      ...captions.map(c => `— ${c.item} —\n${c.caption}\n`)
+    ].join('\n');
+
+    const toAddress = env.LEAD_EMAIL || 'brkadiyala@gmail.com';
+    const fromAddress = env.FROM_EMAIL || 'Luxury Redefined <leads@luxuryredefined.homes>';
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: fromAddress, to: [toAddress], subject: `Social captions ready — week of ${weekLabel}`, text })
+    });
+  } catch (err) {
+    console.log('Social post job failed:', String(err));
+  }
+}
+
 async function handleConcierge(request, env) {
   if (!env.ANTHROPIC_API_KEY) {
     return json({ error: 'Concierge is not configured yet (missing ANTHROPIC_API_KEY).' }, 500);
@@ -349,8 +699,25 @@ export default {
     if (request.method === 'POST' && url.pathname === '/api/concierge') {
       return handleConcierge(request, env);
     }
+    if (request.method === 'GET' && url.pathname === '/admin/listing') {
+      if (!checkAdminAuth(request, env)) return requireAdminAuth();
+      return new Response(adminListingFormPage(), { headers: { 'Content-Type': 'text/html' } });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/agent/listing-description') {
+      return handleListingDescription(request, env);
+    }
 
     // Everything else: serve the static site files as before.
     return env.ASSETS.fetch(request);
+  },
+
+  // Cloudflare Cron Triggers (configured in wrangler.jsonc under "triggers").
+  // Both jobs email a draft to LEAD_EMAIL — neither publishes automatically.
+  async scheduled(event, env, ctx) {
+    if (event.cron === '0 13 1 * *') {
+      ctx.waitUntil(runMarketReportJob(env));
+    } else if (event.cron === '0 13 * * 1') {
+      ctx.waitUntil(runSocialPostJob(env));
+    }
   }
 };
