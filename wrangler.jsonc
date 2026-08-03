@@ -1,22 +1,31 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "pb-uxury",
-  "main": "_worker.js",
-  "compatibility_date": "2026-07-27",
-  "observability": {
-    "enabled": true
-  },
-  "assets": {
-    "directory": "public",
-    "binding": "ASSETS"
-  },
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
-  "triggers": {
-    "crons": ["0 13 1 * *", "0 13 * * 1"]
-  },
-  "vars": {
-    "KVCORE_LEAD_EMAIL": "leads+daltonwaderealestategroup11662-a-2088722@kvcore.com"
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "pb-uxury",
+	"main": "_worker.js",
+	"compatibility_date": "2026-07-27",
+	"observability": {
+		"enabled": true
+	},
+	"assets": {
+		"directory": "public",
+		"binding": "ASSETS"
+	},
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"triggers": {
+		"crons": [
+			"0 13 1 * *",
+			"0 13 * * 1"
+		]
+	},
+	"vars": {
+		"KVCORE_LEAD_EMAIL": "leads+daltonwaderealestategroup11662-a-2088722@kvcore.com"
+	},
+	"kv_namespaces": [
+		{
+			"binding": "REPORTS_KV",
+			"id": "bee6759ce5ae4e3683b6dbb198bd8885"
+		}
+	]
 }

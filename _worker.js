@@ -12,6 +12,8 @@
  * through to the static site files (env.ASSETS).
  */
 
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+
 const SYSTEM_PROMPT = `You are the Palm Beach Private Concierge for "Luxury Redefined Palm Beach," a website operated by licensed agents of Dalton Wade Real Estate Group (Broker: Bharath Kadiyala, License #BK3462426, Florida Firm License #CQ1047837, 1st Ave S Ste 200, St. Petersburg, FL 33701). You represent a private, high-touch real estate advisory practice, not a discount brokerage — lead with expertise and discretion, not price.
 
 Facts you can rely on:
@@ -495,17 +497,152 @@ const MARKET_REPORT_SYSTEM_PROMPT = `You write the "Palm Beach County luxury rea
 
 Use web search to find current news and data on the Palm Beach County (and nearby South Florida) luxury real estate market — inventory levels, notable sales, interest rate context, migration trends, new development activity.
 
-Write a report with this structure (use ## for section headers):
+Write a report with this EXACT structure (use "## " at the start of each header line, nothing else on that line):
 ## Where the market stands
 ## What's moving
 ## What to watch
 
-400-600 words total. Cite what you found in your own words (no direct quotes). End with exactly this line on its own, verbatim: "Note: this draft was AI-researched from public sources and has not been verified against BeachesMLS data — confirm figures before publishing."`;
+400-600 words total, in short paragraphs (2-4 sentences each). Cite what you found in your own words (no direct quotes). Do not include a title, byline, or the month/year anywhere — that's added separately. Do not include any closing note or disclaimer — that's added separately too. End your response right after the "What to watch" section's last paragraph.`;
+
+/* Splits the raw "## Header" formatted draft into a title + array of
+   {heading, paragraphs[]} sections, shared by both the HTML and PDF
+   renderers below so the two stay in sync. */
+function parseReportSections(draft) {
+  const lines = draft.split('\n').map(l => l.trim());
+  const sections = [];
+  let current = null;
+  for (const line of lines) {
+    if (!line) continue;
+    if (line.startsWith('## ')) {
+      current = { heading: line.slice(3).trim(), paragraphs: [] };
+      sections.push(current);
+    } else if (current) {
+      current.paragraphs.push(line);
+    }
+  }
+  return sections;
+}
+
+const REPORT_DISCLAIMER = 'This draft was AI-researched from public sources and has not been verified against BeachesMLS data. Confirm all figures before publishing or sharing with clients.';
+
+function renderReportHTML(monthLabel, sections) {
+  const sectionsHtml = sections.map(s => `
+    <h2 style="font-family: 'Playfair Display', serif; font-size: 22px; color: #0f1720; margin: 32px 0 12px;">${s.heading}</h2>
+    ${s.paragraphs.map(p => `<p style="font-size: 15px; line-height: 1.7; color: #1a2532; margin: 0 0 14px;">${p}</p>`).join('')}
+  `).join('');
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Palm Beach County Luxury Market Report — ${monthLabel}</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', sans-serif; margin: 0; background: #f4ede1; }
+  .header { background: #0a0f16; padding: 56px 40px 44px; }
+  .header p.eyebrow { color: #c9a86a; font-size: 12px; letter-spacing: 0.25em; text-transform: uppercase; margin: 0 0 12px; }
+  .header h1 { font-family: 'Playfair Display', serif; color: #f4ede1; font-size: 34px; margin: 0 0 8px; }
+  .header p.month { color: #8b95a3; font-size: 14px; margin: 0; }
+  .body { max-width: 720px; margin: 0 auto; padding: 40px; background: #ffffff; }
+  .disclaimer { margin-top: 40px; padding: 16px 20px; background: #f4ede1; border-left: 3px solid #c9a86a; font-size: 13px; color: #5a6472; }
+</style></head>
+<body>
+  <div class="header">
+    <p class="eyebrow">Market Update · Draft</p>
+    <h1>Palm Beach County Luxury Market Report</h1>
+    <p class="month">${monthLabel}</p>
+  </div>
+  <div class="body">
+    ${sectionsHtml}
+    <div class="disclaimer">${REPORT_DISCLAIMER}</div>
+  </div>
+</body></html>`;
+}
+
+/* Builds a simple, branded single/multi-page PDF using pdf-lib (pure JS,
+   no filesystem needed — works fine under Workers' nodejs_compat flag).
+   pdf-lib has no built-in text wrapping, so wrapText() below measures
+   each word against the embedded font at the target size and breaks
+   lines manually. */
+async function buildReportPDF(monthLabel, sections) {
+  const doc = await PDFDocument.create();
+  const fontRegular = await doc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+  const PAGE_W = 612, PAGE_H = 792, MARGIN = 56;
+  const NAVY = rgb(0.06, 0.09, 0.125);
+  const GOLD = rgb(0.788, 0.659, 0.416);
+  const GRAY = rgb(0.4, 0.44, 0.5);
+
+  let page = doc.addPage([PAGE_W, PAGE_H]);
+  let y = PAGE_H - MARGIN;
+
+  function newPageIfNeeded(neededHeight) {
+    if (y - neededHeight < MARGIN) {
+      page = doc.addPage([PAGE_W, PAGE_H]);
+      y = PAGE_H - MARGIN;
+    }
+  }
+
+  function wrapText(text, font, size, maxWidth) {
+    const words = text.split(' ');
+    const lines = [];
+    let line = '';
+    for (const word of words) {
+      const test = line ? `${line} ${word}` : word;
+      if (font.widthOfTextAtSize(test, size) > maxWidth && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  function drawParagraph(text, { font, size, color, lineHeight, gapAfter }) {
+    const lines = wrapText(text, font, size, PAGE_W - MARGIN * 2);
+    for (const line of lines) {
+      newPageIfNeeded(lineHeight);
+      page.drawText(line, { x: MARGIN, y, size, font, color });
+      y -= lineHeight;
+    }
+    y -= gapAfter;
+  }
+
+  // Title block
+  page.drawText('PALM BEACH COUNTY', { x: MARGIN, y, size: 10, font: fontBold, color: GOLD });
+  y -= 30;
+  page.drawText('Luxury Market Report', { x: MARGIN, y, size: 26, font: fontBold, color: NAVY });
+  y -= 26;
+  page.drawText(monthLabel, { x: MARGIN, y, size: 12, font: fontRegular, color: GRAY });
+  y -= 36;
+
+  for (const section of sections) {
+    newPageIfNeeded(28);
+    page.drawText(section.heading, { x: MARGIN, y, size: 15, font: fontBold, color: NAVY });
+    y -= 22;
+    for (const para of section.paragraphs) {
+      drawParagraph(para, { font: fontRegular, size: 10.5, color: NAVY, lineHeight: 15, gapAfter: 8 });
+    }
+    y -= 10;
+  }
+
+  newPageIfNeeded(60);
+  y -= 6;
+  page.drawLine({ start: { x: MARGIN, y }, end: { x: MARGIN + 70, y }, thickness: 2, color: GOLD });
+  y -= 18;
+  drawParagraph(REPORT_DISCLAIMER, { font: fontRegular, size: 9, color: GRAY, lineHeight: 12, gapAfter: 0 });
+
+  return doc.save();
+}
 
 async function runMarketReportJob(env) {
   if (!env.ANTHROPIC_API_KEY || !env.RESEND_API_KEY) {
     console.log('Market report job skipped: missing ANTHROPIC_API_KEY or RESEND_API_KEY');
     return { ok: false, error: 'Missing ANTHROPIC_API_KEY or RESEND_API_KEY' };
+  }
+  if (!env.REPORTS_KV) {
+    console.log('Market report job skipped: missing REPORTS_KV binding');
+    return { ok: false, error: 'Missing REPORTS_KV binding — see setup instructions' };
   }
 
   const monthLabel = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'America/New_York' });
@@ -535,17 +672,37 @@ async function runMarketReportJob(env) {
 
     const data = await res.json();
     const draft = (data.content || []).map(b => (b.type === 'text' ? b.text : '')).join('\n').trim();
+    const sections = parseReportSections(draft);
+
+    if (!sections.length) {
+      return { ok: false, error: 'AI response had no parseable sections', raw: draft };
+    }
+
+    const html = renderReportHTML(monthLabel, sections);
+    const pdfBytes = await buildReportPDF(monthLabel, sections);
+
+    await env.REPORTS_KV.put('market-report-html', html);
+    await env.REPORTS_KV.put('market-report-pdf', pdfBytes);
+    await env.REPORTS_KV.put('market-report-meta', JSON.stringify({ monthLabel, generatedAt: new Date().toISOString() }));
 
     const toAddress = env.LEAD_EMAIL || 'brkadiyala@gmail.com';
     const fromAddress = env.FROM_EMAIL || 'Luxury Redefined <leads@luxuryredefined.homes>';
+    const siteUrl = env.SITE_URL || 'https://luxuryredefined.homes';
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: fromAddress,
         to: [toAddress],
-        subject: `Market report draft — ${monthLabel} (review before publishing)`,
-        text: draft || 'No content was generated — check the Worker logs.'
+        subject: `Market report ready — ${monthLabel} (review before publishing)`,
+        text: [
+          `This month's market report draft is ready:`,
+          ``,
+          `View: ${siteUrl}/admin/report/market-report`,
+          `Download PDF: ${siteUrl}/admin/report/market-report.pdf`,
+          ``,
+          `Both links require the admin password. ${REPORT_DISCLAIMER}`
+        ].join('\n')
       })
     });
 
@@ -554,7 +711,7 @@ async function runMarketReportJob(env) {
       return { ok: false, error: 'Email send failed', detail };
     }
 
-    return { ok: true, monthLabel, wordCount: draft.split(/\s+/).length };
+    return { ok: true, monthLabel, sections: sections.length };
   } catch (err) {
     console.log('Market report job failed:', String(err));
     return { ok: false, error: String(err) };
@@ -728,6 +885,26 @@ export default {
       if (!checkAdminAuth(request, env)) return requireAdminAuth();
       const result = await runMarketReportJob(env);
       return json(result, result.ok ? 200 : 500);
+    }
+    if (request.method === 'GET' && url.pathname === '/admin/report/market-report') {
+      if (!checkAdminAuth(request, env)) return requireAdminAuth();
+      if (!env.REPORTS_KV) return new Response('REPORTS_KV binding is not configured.', { status: 500 });
+      const html = await env.REPORTS_KV.get('market-report-html');
+      if (!html) return new Response('No report has been generated yet — visit /admin/run/market-report first.', { status: 404 });
+      return new Response(html, { headers: { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' } });
+    }
+    if (request.method === 'GET' && url.pathname === '/admin/report/market-report.pdf') {
+      if (!checkAdminAuth(request, env)) return requireAdminAuth();
+      if (!env.REPORTS_KV) return new Response('REPORTS_KV binding is not configured.', { status: 500 });
+      const pdfBytes = await env.REPORTS_KV.get('market-report-pdf', 'arrayBuffer');
+      if (!pdfBytes) return new Response('No report has been generated yet — visit /admin/run/market-report first.', { status: 404 });
+      return new Response(pdfBytes, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': 'inline; filename="palm-beach-market-report.pdf"',
+          'Cache-Control': 'no-store'
+        }
+      });
     }
     if (request.method === 'GET' && url.pathname === '/admin/run/social-post') {
       if (!checkAdminAuth(request, env)) return requireAdminAuth();
