@@ -505,7 +505,7 @@ Write a report with this structure (use ## for section headers):
 async function runMarketReportJob(env) {
   if (!env.ANTHROPIC_API_KEY || !env.RESEND_API_KEY) {
     console.log('Market report job skipped: missing ANTHROPIC_API_KEY or RESEND_API_KEY');
-    return;
+    return { ok: false, error: 'Missing ANTHROPIC_API_KEY or RESEND_API_KEY' };
   }
 
   const monthLabel = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'America/New_York' });
@@ -528,8 +528,9 @@ async function runMarketReportJob(env) {
     });
 
     if (!res.ok) {
-      console.log('Market report job: AI request failed', await res.text());
-      return;
+      const detail = await res.text();
+      console.log('Market report job: AI request failed', detail);
+      return { ok: false, error: 'AI request failed', detail };
     }
 
     const data = await res.json();
@@ -537,7 +538,7 @@ async function runMarketReportJob(env) {
 
     const toAddress = env.LEAD_EMAIL || 'brkadiyala@gmail.com';
     const fromAddress = env.FROM_EMAIL || 'Luxury Redefined <leads@luxuryredefined.homes>';
-    await fetch('https://api.resend.com/emails', {
+    const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -547,8 +548,16 @@ async function runMarketReportJob(env) {
         text: draft || 'No content was generated — check the Worker logs.'
       })
     });
+
+    if (!emailRes.ok) {
+      const detail = await emailRes.text();
+      return { ok: false, error: 'Email send failed', detail };
+    }
+
+    return { ok: true, monthLabel, wordCount: draft.split(/\s+/).length };
   } catch (err) {
     console.log('Market report job failed:', String(err));
+    return { ok: false, error: String(err) };
   }
 }
 
@@ -574,7 +583,7 @@ For each item given, write one caption, 40-60 words, ending with 3-5 relevant ha
 async function runSocialPostJob(env) {
   if (!env.ANTHROPIC_API_KEY || !env.RESEND_API_KEY) {
     console.log('Social post job skipped: missing ANTHROPIC_API_KEY or RESEND_API_KEY');
-    return;
+    return { ok: false, error: 'Missing ANTHROPIC_API_KEY or RESEND_API_KEY' };
   }
 
   const itemsList = CURRENT_CONTENT_SNAPSHOT
@@ -598,8 +607,9 @@ async function runSocialPostJob(env) {
     });
 
     if (!res.ok) {
-      console.log('Social post job: AI request failed', await res.text());
-      return;
+      const detail = await res.text();
+      console.log('Social post job: AI request failed', detail);
+      return { ok: false, error: 'AI request failed', detail };
     }
 
     const data = await res.json();
@@ -610,7 +620,7 @@ async function runSocialPostJob(env) {
       captions = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ''));
     } catch {
       console.log('Social post job: could not parse AI response:', raw);
-      return;
+      return { ok: false, error: 'Could not parse AI response', raw };
     }
 
     const weekLabel = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
@@ -623,13 +633,21 @@ async function runSocialPostJob(env) {
 
     const toAddress = env.LEAD_EMAIL || 'brkadiyala@gmail.com';
     const fromAddress = env.FROM_EMAIL || 'Luxury Redefined <leads@luxuryredefined.homes>';
-    await fetch('https://api.resend.com/emails', {
+    const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: fromAddress, to: [toAddress], subject: `Social captions ready — week of ${weekLabel}`, text })
     });
+
+    if (!emailRes.ok) {
+      const detail = await emailRes.text();
+      return { ok: false, error: 'Email send failed', detail };
+    }
+
+    return { ok: true, weekLabel, count: captions.length };
   } catch (err) {
     console.log('Social post job failed:', String(err));
+    return { ok: false, error: String(err) };
   }
 }
 
@@ -705,6 +723,16 @@ export default {
     }
     if (request.method === 'POST' && url.pathname === '/api/agent/listing-description') {
       return handleListingDescription(request, env);
+    }
+    if (request.method === 'GET' && url.pathname === '/admin/run/market-report') {
+      if (!checkAdminAuth(request, env)) return requireAdminAuth();
+      const result = await runMarketReportJob(env);
+      return json(result, result.ok ? 200 : 500);
+    }
+    if (request.method === 'GET' && url.pathname === '/admin/run/social-post') {
+      if (!checkAdminAuth(request, env)) return requireAdminAuth();
+      const result = await runSocialPostJob(env);
+      return json(result, result.ok ? 200 : 500);
     }
 
     // Everything else: serve the static site files as before.
