@@ -345,7 +345,79 @@
     <h2 class="font-serif text-3xl">Featured across Palm Beach County</h2>
     <a href="#search" class="text-sm text-navy/60 hover:text-gold transition">View all listings →</a>
   </div>
-  <div id="listing-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
+  <div id="listing-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="border border-navy/10 rounded-sm overflow-hidden hover:shadow-lg transition">
+      <div class="photo-block tagged h-52"><img src="images/waterfront-listing.jpg" alt="Waterfront luxury home" class="w-full h-full object-cover"></div>
+      <div class="p-4">
+        <p class="text-gold text-xs uppercase tracking-[0.1em] mb-1.5">Waterfront</p>
+        <p class="font-serif text-xl text-gold-dim">$18,750,000</p>
+        <p class="text-sm mt-1">1230 N Ocean Blvd, Palm Beach, FL</p>
+        <p class="text-xs text-navy/50 mt-1">6 Beds &nbsp;|&nbsp; 7.5 Baths &nbsp;|&nbsp; 7,200 Sq Ft</p>
+      </div>
+    </div>
+    <div class="border border-navy/10 rounded-sm overflow-hidden hover:shadow-lg transition">
+      <div class="photo-block tagged h-52"><img src="images/golf-listing.jpg" alt="Golf community luxury home" class="w-full h-full object-cover"></div>
+      <div class="p-4">
+        <p class="text-gold text-xs uppercase tracking-[0.1em] mb-1.5">Golf community</p>
+        <p class="font-serif text-xl text-gold-dim">$6,950,000</p>
+        <p class="text-sm mt-1">215 Bears Club Dr, Jupiter, FL</p>
+        <p class="text-xs text-navy/50 mt-1">5 Beds &nbsp;|&nbsp; 6.5 Baths &nbsp;|&nbsp; 5,300 Sq Ft</p>
+      </div>
+    </div>
+    <div class="border border-navy/10 rounded-sm overflow-hidden hover:shadow-lg transition">
+      <div class="photo-block tagged h-52"><img src="images/new-construction-listing.jpg" alt="New construction luxury home" class="w-full h-full object-cover"></div>
+      <div class="p-4">
+        <p class="text-gold text-xs uppercase tracking-[0.1em] mb-1.5">New construction</p>
+        <p class="font-serif text-xl text-gold-dim">$9,995,000</p>
+        <p class="text-sm mt-1">3107 S Ocean Blvd, Highland Beach, FL</p>
+        <p class="text-xs text-navy/50 mt-1">5 Beds &nbsp;|&nbsp; 6.5 Baths &nbsp;|&nbsp; 6,100 Sq Ft</p>
+      </div>
+    </div>
+  </div>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "itemListElement": [
+      {
+        "@type": "RealEstateListing",
+        "position": 1,
+        "name": "Waterfront estate, 1230 N Ocean Blvd, Palm Beach, FL",
+        "url": "https://luxuryredefined.homes/communities/palm-beach.html",
+        "image": "https://luxuryredefined.homes/images/waterfront-listing.jpg",
+        "address": { "@type": "PostalAddress", "streetAddress": "1230 N Ocean Blvd", "addressLocality": "Palm Beach", "addressRegion": "FL" },
+        "numberOfRooms": 6,
+        "numberOfBathroomsTotal": 7.5,
+        "floorSize": { "@type": "QuantitativeValue", "value": 7200, "unitCode": "FTK" },
+        "offers": { "@type": "Offer", "price": 18750000, "priceCurrency": "USD" }
+      },
+      {
+        "@type": "RealEstateListing",
+        "position": 2,
+        "name": "Golf community estate, 215 Bears Club Dr, Jupiter, FL",
+        "url": "https://luxuryredefined.homes/communities/jupiter.html",
+        "image": "https://luxuryredefined.homes/images/golf-listing.jpg",
+        "address": { "@type": "PostalAddress", "streetAddress": "215 Bears Club Dr", "addressLocality": "Jupiter", "addressRegion": "FL" },
+        "numberOfRooms": 5,
+        "numberOfBathroomsTotal": 6.5,
+        "floorSize": { "@type": "QuantitativeValue", "value": 5300, "unitCode": "FTK" },
+        "offers": { "@type": "Offer", "price": 6950000, "priceCurrency": "USD" }
+      },
+      {
+        "@type": "RealEstateListing",
+        "position": 3,
+        "name": "New construction estate, 3107 S Ocean Blvd, Highland Beach, FL",
+        "url": "https://luxuryredefined.homes/new-developments.html",
+        "image": "https://luxuryredefined.homes/images/new-construction-listing.jpg",
+        "address": { "@type": "PostalAddress", "streetAddress": "3107 S Ocean Blvd", "addressLocality": "Highland Beach", "addressRegion": "FL" },
+        "numberOfRooms": 5,
+        "numberOfBathroomsTotal": 6.5,
+        "floorSize": { "@type": "QuantitativeValue", "value": 6100, "unitCode": "FTK" },
+        "offers": { "@type": "Offer", "price": 9995000, "priceCurrency": "USD" }
+      }
+    ]
+  }
+  </script>
 </section>
 
 <!-- ================= REGIONS ================= -->
