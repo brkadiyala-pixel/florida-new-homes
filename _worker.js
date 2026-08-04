@@ -834,6 +834,105 @@ async function runSocialPostJob(env) {
   }
 }
 
+/* =====================================================================
+   4. CITATION MONITOR
+   Runs monthly (15th, offset from the market report on the 1st). Asks
+   Claude, WITH real web search enabled, the same kinds of questions a
+   prospective buyer might actually ask an AI assistant -- then checks
+   whether this brokerage's name or site gets mentioned in the answer.
+   This is a real, measurable GEO feedback loop, not a guess.
+   ===================================================================== */
+
+const CITATION_TEST_QUERIES = [
+  'Who is the best luxury real estate agent in Palm Beach, Florida?',
+  'Who is the best luxury real estate agent in Jupiter, Florida?',
+  'Who is the best luxury real estate agent in Boca Raton, Florida?',
+  'Best real estate brokerage for waterfront homes in Palm Beach County, Florida',
+  'Where can I find off-market luxury real estate listings in Palm Beach County?'
+];
+
+// Any of these appearing in the answer counts as a citation/mention.
+const CITATION_MARKERS = [
+  'luxury redefined',
+  'luxuryredefined.homes',
+  'dalton wade',
+  'bharath kadiyala'
+];
+
+async function runCitationMonitorJob(env) {
+  if (!env.ANTHROPIC_API_KEY || !env.RESEND_API_KEY) {
+    console.log('Citation monitor skipped: missing ANTHROPIC_API_KEY or RESEND_API_KEY');
+    return { ok: false, error: 'Missing ANTHROPIC_API_KEY or RESEND_API_KEY' };
+  }
+
+  const results = [];
+
+  for (const query of CITATION_TEST_QUERIES) {
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-5',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: query }],
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }]
+        })
+      });
+
+      if (!res.ok) {
+        results.push({ query, ok: false, error: await res.text() });
+        continue;
+      }
+
+      const data = await res.json();
+      const answer = (data.content || []).map(b => (b.type === 'text' ? b.text : '')).join('').trim();
+      const lower = answer.toLowerCase();
+      const cited = CITATION_MARKERS.some(marker => lower.includes(marker));
+
+      results.push({ query, ok: true, cited, answerPreview: answer.slice(0, 400) });
+    } catch (err) {
+      results.push({ query, ok: false, error: String(err) });
+    }
+  }
+
+  const citedCount = results.filter(r => r.cited).length;
+  const monthLabel = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'America/New_York' });
+
+  if (env.REPORTS_KV) {
+    await env.REPORTS_KV.put('citation-monitor-latest', JSON.stringify({ monthLabel, results, generatedAt: new Date().toISOString() }));
+  }
+
+  const toAddress = env.LEAD_EMAIL || 'brkadiyala@gmail.com';
+  const fromAddress = env.FROM_EMAIL || 'Luxury Redefined <leads@luxuryredefined.homes>';
+  const text = [
+    `AI citation check — ${monthLabel}`,
+    `Cited in ${citedCount} of ${results.length} test queries.`,
+    ``,
+    ...results.map(r => r.ok
+      ? `[${r.cited ? 'CITED' : 'not cited'}] "${r.query}"\n  ${r.answerPreview}\n`
+      : `[ERROR] "${r.query}" -- ${r.error}\n`
+    ),
+    `Full history: ${env.SITE_URL || 'https://luxuryredefined.homes'}/admin/report/citation-monitor`
+  ].join('\n');
+
+  const emailRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: fromAddress, to: [toAddress], subject: `AI citation check — ${citedCount}/${results.length} — ${monthLabel}`, text })
+  });
+
+  if (!emailRes.ok) {
+    return { ok: false, error: 'Email send failed', detail: await emailRes.text() };
+  }
+
+  return { ok: true, monthLabel, citedCount, total: results.length };
+}
+
 async function handleConcierge(request, env) {
   if (!env.ANTHROPIC_API_KEY) {
     return json({ error: 'Concierge is not configured yet (missing ANTHROPIC_API_KEY).' }, 500);
@@ -937,18 +1036,33 @@ export default {
       const result = await runSocialPostJob(env);
       return json(result, result.ok ? 200 : 500);
     }
+    if (request.method === 'GET' && url.pathname === '/admin/run/citation-monitor') {
+      if (!checkAdminAuth(request, env)) return requireAdminAuth();
+      const result = await runCitationMonitorJob(env);
+      return json(result, result.ok ? 200 : 500);
+    }
+    if (request.method === 'GET' && url.pathname === '/admin/report/citation-monitor') {
+      if (!checkAdminAuth(request, env)) return requireAdminAuth();
+      if (!env.REPORTS_KV) return new Response('REPORTS_KV binding is not configured.', { status: 500 });
+      const raw = await env.REPORTS_KV.get('citation-monitor-latest');
+      if (!raw) return new Response('No citation check has run yet — visit /admin/run/citation-monitor first.', { status: 404 });
+      const data = JSON.parse(raw);
+      return json(data);
+    }
 
     // Everything else: serve the static site files as before.
     return env.ASSETS.fetch(request);
   },
 
   // Cloudflare Cron Triggers (configured in wrangler.jsonc under "triggers").
-  // Both jobs email a draft to LEAD_EMAIL — neither publishes automatically.
+  // All jobs email a draft/summary to LEAD_EMAIL -- none publish automatically.
   async scheduled(event, env, ctx) {
     if (event.cron === '0 13 1 * *') {
       ctx.waitUntil(runMarketReportJob(env));
     } else if (event.cron === '0 13 * * 1') {
       ctx.waitUntil(runSocialPostJob(env));
+    } else if (event.cron === '0 13 15 * *') {
+      ctx.waitUntil(runCitationMonitorJob(env));
     }
   }
 };
