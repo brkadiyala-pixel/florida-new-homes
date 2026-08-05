@@ -327,7 +327,21 @@ async function queryResoWithCache(env, filterParams, top, skip) {
 
   if (env.REPORTS_KV) {
     const cached = await env.REPORTS_KV.get(cacheKey);
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      // Don't trust a cached value just because it exists -- the same bug
+      // found and fixed in getFeaturedListings applies here too: a stale
+      // empty result (from a transient Spark hiccup, or from before a
+      // filter-logic fix like the tolower() revert) would otherwise be
+      // returned as valid for the full 30-minute TTL, making a development
+      // with real active listings appear to have none. Only short-circuit
+      // on genuinely non-empty cached data.
+      try {
+        const parsedCache = JSON.parse(cached);
+        if (parsedCache && Array.isArray(parsedCache.listings) && parsedCache.listings.length) {
+          return parsedCache;
+        }
+      } catch { /* fall through to a fresh query */ }
+    }
   }
 
   const query = new URLSearchParams({
@@ -354,8 +368,12 @@ async function queryResoWithCache(env, filterParams, top, skip) {
   const data = await res.json();
   const result = { listings: data.value || [], total: data['@odata.count'] ?? null };
 
-  if (env.REPORTS_KV) {
-    // 30 min TTL -- well inside the 12h compliance requirement.
+  if (env.REPORTS_KV && result.listings.length) {
+    // 30 min TTL -- well inside the 12h compliance requirement. Only
+    // caching non-empty results means a genuine zero-match or a transient
+    // API hiccup self-heals on the very next request, instead of an empty
+    // result persisting and looking like "this development has no
+    // inventory" for a full 30 minutes when that isn't actually true.
     await env.REPORTS_KV.put(cacheKey, JSON.stringify(result), { expirationTtl: 1800 });
   }
 
