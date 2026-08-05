@@ -184,11 +184,10 @@
           <p class="text-sand/50 text-xs flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-gold inline-block pulse-dot"></span>Private property matching · guided by Bharath Kadiyala</p>
         </div>
       </div>
-      <p class="text-sand/70 text-sm mt-4 mb-4 leading-relaxed">What are you looking for?</p>
 
-      <input id="quick-search-input" type="text" placeholder="Oceanfront home in Jupiter under $8M with a dock..."
-        class="w-full bg-navy-card border border-gold/30 rounded-full px-4 py-3 text-sand text-sm focus:outline-none focus:border-gold mb-4"
-        onkeydown="if(event.key==='Enter') quickSearch()">
+      <div id="chat-log" class="space-y-3 mt-4 mb-4 max-h-80 overflow-y-auto pr-1">
+        <div class="bg-navy-card rounded-md p-3 text-sand/90 text-sm">What are you looking for?</div>
+      </div>
 
       <div class="flex flex-wrap gap-2 mb-4">
         <button type="button" onclick="chatChip('Waterfront home')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Waterfront</button>
@@ -198,10 +197,18 @@
         <button type="button" onclick="chatChip('Off-market properties')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Off-Market</button>
       </div>
 
-      <button onclick="quickSearch()" class="w-full bg-gold text-navy font-medium rounded-full py-3 text-sm hover:bg-gold-light transition mb-1">Find My Homes →</button>
+      <!-- Compose bar: pinned at the bottom, used for both the opening
+           message and every reply after -- matches how a real conversation
+           works (you reply near the latest message, not from a box fixed
+           at the top of an ever-growing thread). -->
+      <div class="flex gap-2 mt-auto">
+        <input id="quick-search-input" type="text" placeholder="Oceanfront home in Jupiter under $8M with a dock..."
+          class="flex-1 bg-navy-card border border-gold/30 rounded-full px-4 py-3 text-sand text-sm focus:outline-none focus:border-gold"
+          onkeydown="if(event.key==='Enter') quickSearch()">
+        <button onclick="quickSearch()" aria-label="Curate my search" title="Curate my search" class="w-11 h-11 shrink-0 rounded-full bg-gold text-navy flex items-center justify-center hover:bg-gold-light transition text-lg">→</button>
+      </div>
 
       <input id="chat-input" type="hidden">
-      <div id="chat-log" class="space-y-3 mt-4 max-h-80 overflow-y-auto pr-1 empty:hidden"></div>
     </div>
 
   </div>

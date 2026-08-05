@@ -39,7 +39,8 @@ How to behave:
 - IDX/live listings: you have a search_listings tool connected to the real BeachesMLS feed. Once you have at least one concrete, specific filter (a city, a price range, a bed count, or a property type), call it — don't wait to gather everything first. If it returns real results, reference those specific addresses, prices, and details in your reply. If it returns nothing, say so plainly and offer to connect them with a specialist for off-market options rather than inventing a listing.
 - If someone wants to book a consultation, get a valuation, request off-market access, or asks something you can't fully answer, ask for their name and best phone number so a specialist can follow up — do not just say goodbye.
 - Keep replies under about 60 words unless the person explicitly asks for more detail or an explanation (e.g. "why Jupiter over Palm Beach?"). Long-form answers are for when they're asked for, not the default.
-- Whenever a short multiple-choice question would move the conversation forward faster than open text (e.g. "direct oceanfront or Intracoastal with a dock?"), end your reply with the exact marker "[SUGGEST: Option One | Option Two | Option Three]" on its own line -- 2 to 4 short options (2-4 words each), or up to 5 for the "help me choose an area" lifestyle question specifically. Never mention this marker or explain it; it's a signal for the website to render clickable buttons, not part of your visible reply. Don't use it on every message -- only when a genuine short-answer choice exists (not for open-ended questions like budget, which the person should type themselves).
+- Whenever a short multiple-choice question would move the conversation forward faster than open text (e.g. "direct oceanfront or Intracoastal with a dock?"), end your reply with the exact marker "[SUGGEST: Option One | Option Two | Option Three]" on its own line -- 2 to 4 short options (2-4 words each), or up to 5 for the "help me choose an area" lifestyle question specifically. Never mention this marker or explain it; it's a signal for the website to render clickable buttons, not part of your visible reply.
+- This is a hard rule, not a suggestion: if your own sentence lists 2-5 specific named options -- whether that's price tiers you're proposing ("$5-10M, $10-15M, or $15M+"), locations, property features, or anything else -- you MUST restate those exact same options in a [SUGGEST] marker. Never write out a set of concrete choices as plain prose without the marker; that forces the person back to typing when a tap would do. The only time to skip the marker is a genuinely open question with no bounded set of answers (e.g. "what's your budget?" with nothing proposed).
 - "Help me choose an area" flow: if someone doesn't know where to buy, or explicitly asks for this, ask "Which lifestyle sounds most like you?" and offer "[SUGGEST: Oceanfront & social | Boating & privacy | Golf & club life | Walkable & cosmopolitan | Quiet estate living]". Once they pick one, recommend the community(ies) that fit best (Palm Beach, Jupiter, Boca Raton, or Manalapan) with a one-line reason for each, grounded in the facts above.
 - Once the conversation has established genuine buying or selling intent with at least one specific detail (a location, a budget, a property type, or a timeline), end that reply with the exact marker "[CAPTURE_LEAD]" on its own line, after your normal message (and after any [SUGGEST] marker, if both apply). Use this at most once per conversation. Never mention this marker to the person or explain what it does — it is a signal for the website, not part of your visible reply.`;
 
@@ -1497,11 +1498,16 @@ export default {
     // the page -- it only upgrades it when real data is available.
     if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
       const assetResponse = await env.ASSETS.fetch(request);
-      if (!env.SPARK_ACCESS_TOKEN) return assetResponse;
+      const noStore = (resp) => {
+        const r = new Response(resp.body, resp);
+        r.headers.set('Cache-Control', 'no-store');
+        return r;
+      };
+      if (!env.SPARK_ACCESS_TOKEN) return noStore(assetResponse);
 
       try {
         const featured = await getFeaturedListings(env);
-        if (!featured.length) return assetResponse;
+        if (!featured.length) return noStore(assetResponse);
 
         const cardsHtml = featured.map(renderIdxListingCard).join('');
         const disclaimerHtml = renderIdxDisclaimerBlock();
@@ -1519,12 +1525,20 @@ export default {
           }
         }
 
-        return new HTMLRewriter()
+        const rewritten = new HTMLRewriter()
           .on('#listing-grid', new ListingGridHandler())
           .transform(assetResponse);
+
+        // Explicitly disable caching on every path through this handler.
+        // Without this, the response inherits whatever Cache-Control the
+        // static asset came with, which can cause Cloudflare's edge (or the
+        // browser) to keep serving an old snapshot of the homepage --
+        // including old "Loading current listings..." fallback states --
+        // even after the underlying data or code is fixed.
+        return noStore(rewritten);
       } catch (err) {
         console.log('Homepage SSR listing injection failed (non-fatal):', String(err));
-        return assetResponse;
+        return noStore(assetResponse);
       }
     }
 
