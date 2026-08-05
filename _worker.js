@@ -38,10 +38,8 @@ How to behave:
 - Never stack more than one question in a single reply, even if it's phrased as one sentence with "and."
 - IDX/live listings: you have a search_listings tool connected to the real BeachesMLS feed. Once you have at least one concrete, specific filter (a city, a price range, a bed count, or a property type), call it — don't wait to gather everything first. If it returns real results, reference those specific addresses, prices, and details in your reply. If it returns nothing, say so plainly and offer to connect them with a specialist for off-market options rather than inventing a listing.
 - If someone wants to book a consultation, get a valuation, request off-market access, or asks something you can't fully answer, ask for their name and best phone number so a specialist can follow up — do not just say goodbye.
-- Keep replies under about 60 words unless the person explicitly asks for more detail or an explanation (e.g. "why Jupiter over Palm Beach?"). Long-form answers are for when they're asked for, not the default.
-- Whenever a short multiple-choice question would move the conversation forward faster than open text (e.g. "direct oceanfront or Intracoastal with a dock?"), end your reply with the exact marker "[SUGGEST: Option One | Option Two | Option Three]" on its own line -- 2 to 4 short options (2-4 words each), or up to 5 for the "help me choose an area" lifestyle question specifically. Never mention this marker or explain it; it's a signal for the website to render clickable buttons, not part of your visible reply. Don't use it on every message -- only when a genuine short-answer choice exists (not for open-ended questions like budget, which the person should type themselves).
-- "Help me choose an area" flow: if someone doesn't know where to buy, or explicitly asks for this, ask "Which lifestyle sounds most like you?" and offer "[SUGGEST: Oceanfront & social | Boating & privacy | Golf & club life | Walkable & cosmopolitan | Quiet estate living]". Once they pick one, recommend the community(ies) that fit best (Palm Beach, Jupiter, Boca Raton, or Manalapan) with a one-line reason for each, grounded in the facts above.
-- Once the conversation has established genuine buying or selling intent with at least one specific detail (a location, a budget, a property type, or a timeline), end that reply with the exact marker "[CAPTURE_LEAD]" on its own line, after your normal message (and after any [SUGGEST] marker, if both apply). Use this at most once per conversation. Never mention this marker to the person or explain what it does — it is a signal for the website, not part of your visible reply.`;
+- Keep replies to 2-4 sentences unless the person asks for more detail.
+- Once the conversation has established genuine buying or selling intent with at least one specific detail (a location, a budget, a property type, or a timeline), end that reply with the exact marker "[CAPTURE_LEAD]" on its own line, after your normal message. Use this at most once per conversation. Never mention this marker to the person or explain what it does — it is a signal for the website, not part of your visible reply.`;
 
 function json(body, status = 200, noStore = true) {
   const headers = { 'Content-Type': 'application/json' };
@@ -399,7 +397,12 @@ async function getFeaturedListings(env) {
 
     const data = await res.json();
     const listings = data.value || [];
-    if (env.REPORTS_KV) {
+    // Only cache genuinely successful, non-empty results for the full 30
+    // minutes. Caching an empty result the same way meant one transient
+    // hiccup (a momentary Spark error, a zero-match instant) would make the
+    // homepage fall back to placeholder content for a full 30 minutes
+    // afterward, instead of self-healing on the next request.
+    if (env.REPORTS_KV && listings.length) {
       await env.REPORTS_KV.put(cacheKey, JSON.stringify(listings), { expirationTtl: 1800 });
     }
     return listings;
@@ -1473,6 +1476,15 @@ export default {
       if (!raw) return new Response('No citation check has run yet — visit /admin/run/citation-monitor first.', { status: 404 });
       const data = JSON.parse(raw);
       return json(data);
+    }
+    if (request.method === 'GET' && url.pathname === '/admin/debug/featured-listings') {
+      if (!checkAdminAuth(request, env)) return requireAdminAuth();
+      // Bypasses the cache entirely so you can see the actual, current
+      // Spark query result, not whatever's cached -- useful for confirming
+      // the homepage's featured listings are really pulling live data.
+      if (env.REPORTS_KV) await env.REPORTS_KV.delete('idx-cache:featured');
+      const featured = await getFeaturedListings(env);
+      return json({ count: featured.length, listings: featured });
     }
 
     // Server-render real IDX listings into the homepage at request time --

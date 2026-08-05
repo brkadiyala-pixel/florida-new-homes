@@ -194,15 +194,40 @@
       </div>
 
       <input id="chat-input" type="hidden">
-      <div id="chat-log" class="space-y-3 mb-1 max-h-80 overflow-y-auto pr-1 empty:hidden"></div>
+      <div id="chat-log" class="space-y-3 mb-1 max-h-56 overflow-y-auto pr-1 empty:hidden"></div>
 
-      <p class="text-sand/40 text-xs mt-4 mb-2">Popular searches</p>
-      <div class="flex flex-wrap gap-2 mb-5">
-        <button type="button" onclick="chatChip('Oceanfront home')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Oceanfront</button>
-        <button type="button" onclick="chatChip('Golf community home')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Golf</button>
-        <button type="button" onclick="chatChip('New construction home')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">New construction</button>
-        <button type="button" onclick="chatChip(&quot;I don't know Palm Beach County -- where should I look?&quot;)" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Help me choose an area</button>
+      <p class="text-sand/40 text-xs mt-4 mb-4">Or let me guide you:</p>
+
+      <div class="mb-5">
+        <p class="text-sand text-sm font-medium mb-1"><span class="text-gold">1</span> &nbsp;Which matters more?</p>
+        <p class="text-sand/40 text-xs mb-2">Choose up to 2</p>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" onclick="togglePriority(this,'Ocean access')" class="wizard-pill text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Ocean access</button>
+          <button type="button" onclick="togglePriority(this,'Golf')" class="wizard-pill text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Golf</button>
+          <button type="button" onclick="togglePriority(this,'Walkability')" class="wizard-pill text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Walkability</button>
+          <button type="button" onclick="togglePriority(this,'Privacy')" class="wizard-pill text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Privacy</button>
+          <button type="button" onclick="togglePriority(this,'New construction')" class="wizard-pill text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">New construction</button>
+        </div>
       </div>
+
+      <div class="mb-5">
+        <p class="text-sand text-sm font-medium mb-1"><span class="text-gold">2</span> &nbsp;What price range?</p>
+        <p class="text-sand/40 text-xs mb-2">Select one</p>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" onclick="selectPriceRange(this,'$2M–$5M')" class="wizard-pill-price text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">$2M–$5M</button>
+          <button type="button" onclick="selectPriceRange(this,'$5M–$10M')" class="wizard-pill-price text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">$5M–$10M</button>
+          <button type="button" onclick="selectPriceRange(this,'$10M+')" class="wizard-pill-price text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">$10M+</button>
+        </div>
+      </div>
+
+      <div class="mb-5">
+        <p class="text-sand text-sm font-medium mb-1"><span class="text-gold">3</span> &nbsp;Anything else we should know?</p>
+        <p class="text-sand/40 text-xs mb-2">Optional</p>
+        <input id="wizard-details" type="text" placeholder="e.g. 4+ bedrooms, boat dock, gated community..."
+          class="w-full bg-navy-card border border-navy-line rounded-full px-4 py-2.5 text-sand text-sm focus:outline-none focus:border-gold">
+      </div>
+
+      <button onclick="submitWizard()" class="w-full bg-gold text-navy font-medium rounded-md py-3 text-sm hover:bg-gold-light transition mb-5">Get matched →</button>
 
       <div class="border-t border-navy-line pt-4">
         <p class="text-sand/60 text-xs mb-2">Prefer personal guidance?</p>
@@ -221,8 +246,7 @@
   </div>
 
   <!-- Search bar (IDX-ready) -->
-  <p class="max-w-6xl mx-auto mt-16 text-sand/40 text-xs uppercase tracking-[0.15em] relative z-10">Prefer to search yourself? Search manually</p>
-  <div id="search" class="max-w-6xl mx-auto mt-3 bg-sand rounded-sm p-5 grid grid-cols-2 md:grid-cols-5 gap-4 shadow-2xl relative z-10">
+  <div id="search" class="max-w-6xl mx-auto mt-16 bg-sand rounded-sm p-5 grid grid-cols-2 md:grid-cols-5 gap-4 shadow-2xl relative z-10">
     <div>
       <label class="text-[11px] uppercase tracking-wide text-navy/50">Region</label>
       <select id="f-region" class="w-full bg-transparent border-b border-navy/20 py-2 text-sm focus:outline-none focus:border-gold">
@@ -322,78 +346,8 @@
     <a href="listings.html" class="text-sm text-navy/60 hover:text-gold transition">View all listings →</a>
   </div>
   <div id="listing-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-    <div class="border border-navy/10 rounded-sm overflow-hidden hover:shadow-lg transition">
-      <div class="photo-block tagged h-52"><img src="images/waterfront-listing.jpg" alt="Waterfront luxury home" class="w-full h-full object-cover"></div>
-      <div class="p-4">
-        <p class="text-gold text-xs uppercase tracking-[0.1em] mb-1.5">Waterfront</p>
-        <p class="font-serif text-xl text-gold-dim">$18,750,000</p>
-        <p class="text-sm mt-1">1230 N Ocean Blvd, Palm Beach, FL</p>
-        <p class="text-xs text-navy/50 mt-1">6 Beds &nbsp;|&nbsp; 7.5 Baths &nbsp;|&nbsp; 7,200 Sq Ft</p>
-      </div>
-    </div>
-    <div class="border border-navy/10 rounded-sm overflow-hidden hover:shadow-lg transition">
-      <div class="photo-block tagged h-52"><img src="images/golf-listing.jpg" alt="Golf community luxury home" class="w-full h-full object-cover"></div>
-      <div class="p-4">
-        <p class="text-gold text-xs uppercase tracking-[0.1em] mb-1.5">Golf community</p>
-        <p class="font-serif text-xl text-gold-dim">$6,950,000</p>
-        <p class="text-sm mt-1">215 Bears Club Dr, Jupiter, FL</p>
-        <p class="text-xs text-navy/50 mt-1">5 Beds &nbsp;|&nbsp; 6.5 Baths &nbsp;|&nbsp; 5,300 Sq Ft</p>
-      </div>
-    </div>
-    <div class="border border-navy/10 rounded-sm overflow-hidden hover:shadow-lg transition">
-      <div class="photo-block tagged h-52"><img src="images/new-construction-listing.jpg" alt="New construction luxury home" class="w-full h-full object-cover"></div>
-      <div class="p-4">
-        <p class="text-gold text-xs uppercase tracking-[0.1em] mb-1.5">New construction</p>
-        <p class="font-serif text-xl text-gold-dim">$9,995,000</p>
-        <p class="text-sm mt-1">3107 S Ocean Blvd, Highland Beach, FL</p>
-        <p class="text-xs text-navy/50 mt-1">5 Beds &nbsp;|&nbsp; 6.5 Baths &nbsp;|&nbsp; 6,100 Sq Ft</p>
-      </div>
-    </div>
+    <p class="col-span-full text-center text-navy/50 py-12">Loading current listings... If this doesn't update, <a href="/listings.html" class="underline hover:text-gold-dim">browse all current listings here</a> or <button onclick="openLeadForm('buyer')" class="underline hover:text-gold-dim">tell us what you're looking for</button>.</p>
   </div>
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "ItemList",
-    "itemListElement": [
-      {
-        "@type": "RealEstateListing",
-        "position": 1,
-        "name": "Waterfront estate, 1230 N Ocean Blvd, Palm Beach, FL",
-        "url": "https://luxuryredefined.homes/communities/palm-beach.html",
-        "image": "https://luxuryredefined.homes/images/waterfront-listing.jpg",
-        "address": { "@type": "PostalAddress", "streetAddress": "1230 N Ocean Blvd", "addressLocality": "Palm Beach", "addressRegion": "FL" },
-        "numberOfRooms": 6,
-        "numberOfBathroomsTotal": 7.5,
-        "floorSize": { "@type": "QuantitativeValue", "value": 7200, "unitCode": "FTK" },
-        "offers": { "@type": "Offer", "price": 18750000, "priceCurrency": "USD" }
-      },
-      {
-        "@type": "RealEstateListing",
-        "position": 2,
-        "name": "Golf community estate, 215 Bears Club Dr, Jupiter, FL",
-        "url": "https://luxuryredefined.homes/communities/jupiter.html",
-        "image": "https://luxuryredefined.homes/images/golf-listing.jpg",
-        "address": { "@type": "PostalAddress", "streetAddress": "215 Bears Club Dr", "addressLocality": "Jupiter", "addressRegion": "FL" },
-        "numberOfRooms": 5,
-        "numberOfBathroomsTotal": 6.5,
-        "floorSize": { "@type": "QuantitativeValue", "value": 5300, "unitCode": "FTK" },
-        "offers": { "@type": "Offer", "price": 6950000, "priceCurrency": "USD" }
-      },
-      {
-        "@type": "RealEstateListing",
-        "position": 3,
-        "name": "New construction estate, 3107 S Ocean Blvd, Highland Beach, FL",
-        "url": "https://luxuryredefined.homes/new-developments.html",
-        "image": "https://luxuryredefined.homes/images/new-construction-listing.jpg",
-        "address": { "@type": "PostalAddress", "streetAddress": "3107 S Ocean Blvd", "addressLocality": "Highland Beach", "addressRegion": "FL" },
-        "numberOfRooms": 5,
-        "numberOfBathroomsTotal": 6.5,
-        "floorSize": { "@type": "QuantitativeValue", "value": 6100, "unitCode": "FTK" },
-        "offers": { "@type": "Offer", "price": 9995000, "priceCurrency": "USD" }
-      }
-    ]
-  }
-  </script>
 </section>
 
 <!-- ================= REGIONS ================= -->
@@ -644,94 +598,6 @@
    Replace this array with the response from your IDX/RESO Web API feed.
    Each object maps 1:1 to what a real feed typically returns.
    ===================================================================== */
-const listings = [
-  { tag: 'Waterfront', price: '$18,750,000', addr: '1230 N Ocean Blvd, Palm Beach, FL', beds: 6, baths: 7.5, sqft: '7,200' },
-  { tag: 'Golf community', price: '$6,950,000', addr: '215 Bears Club Dr, Jupiter, FL', beds: 5, baths: 6.5, sqft: '5,300' },
-  { tag: 'New construction', price: '$9,995,000', addr: '3107 S Ocean Blvd, Highland Beach, FL', beds: 5, baths: 6.5, sqft: '6,100' },
-];
-
-function sceneSVG(type) {
-  const scenes = {
-    waterfront: `<svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <rect width="400" height="260" fill="#12202e"/>
-      <rect y="140" width="400" height="120" fill="#c9a86a" opacity="0.18"/>
-      <circle cx="300" cy="150" r="55" fill="#c9a86a" opacity="0.1"/>
-      <circle cx="300" cy="150" r="30" fill="#e8d9b8" opacity="0.32"/>
-      <rect y="190" width="400" height="70" fill="#0a0f16" opacity="0.92"/>
-      <line x1="0" y1="198" x2="400" y2="198" stroke="#e8d9b8" stroke-width="1" opacity="0.15"/>
-      <line x1="0" y1="212" x2="400" y2="212" stroke="#e8d9b8" stroke-width="1" opacity="0.1"/>
-      <path d="M330 260 L330 210 L280 195 L280 260 Z" fill="#0a0f16" opacity="0.85"/>
-      <g fill="#0a0f16"><path d="M40 260 Q44 210 48 190 Q22 183 12 165 Q35 175 50 185 Q35 163 34 143 Q54 168 52 187 Q64 160 84 155 Q60 175 54 192 Q72 185 88 192 Q66 197 52 205 Q54 232 48 260 Z"/></g>
-    </svg>`,
-    golf: `<svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <rect width="400" height="260" fill="#12202e"/>
-      <rect y="150" width="400" height="110" fill="#c9a86a" opacity="0.15"/>
-      <circle cx="90" cy="145" r="40" fill="#e8d9b8" opacity="0.22"/>
-      <path d="M0 200 Q120 160 240 195 Q320 215 400 190 L400 260 L0 260 Z" fill="#0f6e56" opacity="0.55"/>
-      <path d="M0 225 Q140 195 260 220 Q330 235 400 218 L400 260 L0 260 Z" fill="#0a0f16" opacity="0.7"/>
-      <line x1="300" y1="150" x2="300" y2="205" stroke="#e8d9b8" stroke-width="2"/>
-      <path d="M300 150 L330 160 L300 170 Z" fill="#c9a86a"/>
-      <g fill="#0a0f16"><path d="M350 260 Q353 220 356 205 Q334 199 326 185 Q345 193 357 201 Q345 183 344 166 Q360 187 358 202 Q368 181 384 177 Q365 193 360 206 Q374 200 386 206 Q368 210 358 216 Q360 238 356 260 Z"/></g>
-    </svg>`,
-    construction: `<svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <rect width="400" height="260" fill="#12202e"/>
-      <rect y="150" width="400" height="110" fill="#c9a86a" opacity="0.14"/>
-      <circle cx="330" cy="140" r="45" fill="#c9a86a" opacity="0.1"/>
-      <circle cx="330" cy="140" r="24" fill="#e8d9b8" opacity="0.3"/>
-      <rect x="90" y="150" width="220" height="80" fill="#0a0f16"/>
-      <rect x="90" y="120" width="110" height="35" fill="#0a0f16"/>
-      <rect x="110" y="170" width="26" height="26" fill="#e8d9b8" opacity="0.55"/>
-      <rect x="150" y="170" width="26" height="26" fill="#e8d9b8" opacity="0.3"/>
-      <rect x="230" y="170" width="26" height="26" fill="#e8d9b8" opacity="0.5"/>
-      <rect x="270" y="170" width="26" height="26" fill="#e8d9b8" opacity="0.35"/>
-      <rect x="90" y="235" width="220" height="25" fill="#1a2f3f" opacity="0.8"/>
-      <line x1="90" y1="242" x2="310" y2="242" stroke="#e8d9b8" stroke-width="1" opacity="0.2"/>
-    </svg>`,
-    skyline: `<svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <rect width="400" height="260" fill="#12202e"/>
-      <rect y="150" width="400" height="110" fill="#c9a86a" opacity="0.15"/>
-      <circle cx="120" cy="145" r="50" fill="#c9a86a" opacity="0.1"/>
-      <circle cx="120" cy="145" r="26" fill="#e8d9b8" opacity="0.3"/>
-      <path d="M230 260 L230 200 L290 175 L350 200 L350 260 Z" fill="#0a0f16"/>
-      <rect x="245" y="215" width="14" height="20" fill="#e8d9b8" opacity="0.5"/>
-      <rect x="280" y="205" width="14" height="20" fill="#e8d9b8" opacity="0.4"/>
-      <rect x="315" y="215" width="14" height="20" fill="#e8d9b8" opacity="0.5"/>
-      <g fill="#0a0f16"><path d="M50 260 Q54 210 58 190 Q32 183 22 165 Q45 175 60 185 Q45 163 44 143 Q64 168 62 187 Q74 160 94 155 Q70 175 64 192 Q82 185 98 192 Q76 197 62 205 Q64 232 58 260 Z"/></g>
-    </svg>`
-  };
-  return scenes[type] || scenes.skyline;
-}
-function sceneImage(tag) {
-  const images = {
-    'Waterfront': 'images/waterfront-listing.jpg',
-    'Golf community': 'images/golf-listing.jpg',
-    'New construction': 'images/new-construction-listing.jpg'
-  };
-  return images[tag] || null;
-}
-const tagToScene = { 'Waterfront': 'waterfront', 'Golf community': 'golf', 'New construction': 'construction' };
-
-function renderListings(data) {
-  const grid = document.getElementById('listing-grid');
-  grid.innerHTML = data.map(l => {
-    const img = sceneImage(l.tag);
-    const media = img
-      ? `<div class="photo-block tagged h-52"><img src="${img}" alt="${l.tag} luxury home" class="w-full h-full object-cover"></div>`
-      : `<div class="photo-block h-52" data-tag="${l.tag}">${sceneSVG(tagToScene[l.tag] || 'skyline')}</div>`;
-    return `
-    <div class="border border-navy/10 rounded-sm overflow-hidden hover:shadow-lg transition">
-      ${media}
-      <div class="p-4">
-        <p class="text-gold text-xs uppercase tracking-[0.1em] mb-1.5">${l.tag}</p>
-        <p class="font-serif text-xl text-gold-dim">${l.price}</p>
-        <p class="text-sm mt-1">${l.addr}</p>
-        <p class="text-xs text-navy/50 mt-1">${l.beds} Beds &nbsp;|&nbsp; ${l.baths} Baths &nbsp;|&nbsp; ${l.sqft} Sq Ft</p>
-      </div>
-    </div>`;
-  }).join('');
-}
-renderListings(listings);
-
 /* =====================================================================
    IDX SEARCH -- calls the real /api/listings endpoint (backed by
    BeachesMLS via the Spark/RESO Web API). Renders results with the same
@@ -967,6 +833,72 @@ function closeRebateCalculator() {
   document.getElementById('rebate-modal').classList.add('hidden');
 }
 
+/* Guided wizard state — composes a natural-language message from the
+   selections and sends it through the same /api/concierge pipeline as
+   free-text chat, so there's one response path regardless of how the
+   person got there. */
+let wizardPriorities = [];
+let wizardPriceRange = null;
+
+function togglePriority(el, label) {
+  const idx = wizardPriorities.indexOf(label);
+  if (idx > -1) {
+    wizardPriorities.splice(idx, 1);
+    el.classList.remove('selected');
+  } else {
+    if (wizardPriorities.length >= 2) return;
+    wizardPriorities.push(label);
+    el.classList.add('selected');
+  }
+}
+
+function selectPriceRange(el, label) {
+  document.querySelectorAll('.wizard-pill-price').forEach(p => p.classList.remove('selected'));
+  if (wizardPriceRange === label) { wizardPriceRange = null; return; }
+  wizardPriceRange = label;
+  el.classList.add('selected');
+}
+
+let wizardMessage = '';
+async function submitWizard() {
+  const details = document.getElementById('wizard-details').value.trim();
+  const parts = [];
+  if (wizardPriorities.length) parts.push(wizardPriorities.join(' and '));
+  if (wizardPriceRange) parts.push(`in the ${wizardPriceRange} range`);
+  let message = parts.length ? `I'm looking for a home with ${parts.join(', ')}.` : "I'm exploring luxury homes in Palm Beach County.";
+  if (details) message += ` Additional details: ${details}.`;
+  wizardMessage = message;
+  document.getElementById('chat-input').value = message;
+  sendChat();
+
+  // Build a real search from what's actually structured/filterable. Two of
+  // the five priority chips ("Walkability", "Privacy") and "New construction"
+  // have no reliable MLS field to filter on directly -- rather than pretend
+  // otherwise, only "Ocean access" (-> Waterfront) and "Golf" map to an
+  // actual query filter. Everything selected still goes to the specialist
+  // via wizardMessage regardless of what the automated search could use.
+  const params = new URLSearchParams();
+  if (wizardPriorities.includes('Ocean access')) params.set('propertyType', 'Waterfront');
+  else if (wizardPriorities.includes('Golf')) params.set('propertyType', 'Golf community');
+
+  if (wizardPriceRange === '$2M–$5M') { params.set('minPrice', '2000000'); params.set('maxPrice', '5000000'); }
+  else if (wizardPriceRange === '$5M–$10M') { params.set('minPrice', '5000000'); params.set('maxPrice', '10000000'); }
+  else if (wizardPriceRange === '$10M+') { params.set('minPrice', '10000000'); }
+
+  // Best-effort: pull a bed count out of the free-text "anything else" field
+  // (e.g. "4 bed", "4+ bedrooms") since that field isn't a structured input.
+  const bedMatch = details.match(/(\d+)\s*\+?\s*bed/i);
+  if (bedMatch) params.set('beds', bedMatch[1]);
+
+  const priorityLabel = wizardPriorities.length ? wizardPriorities.join(' + ') : 'your criteria';
+  const found = await performIdxSearch(params, { headline: `Current listings matching ${priorityLabel}:` });
+
+  // Whether or not automated matches were found, still offer specialist
+  // follow-up -- especially important for the priorities (walkability,
+  // privacy, new construction) an MLS query can't actually filter on.
+  openLeadForm('get-matched');
+}
+
 function quickSearch() {
   const input = document.getElementById('quick-search-input');
   const text = input.value.trim();
@@ -1075,54 +1007,25 @@ async function sendChat() {
       reply = reply.replace('[CAPTURE_LEAD]', '').trim();
     }
 
-    // Parse the quick-reply button marker: "[SUGGEST: A | B | C]" -- up to
-    // 5 short options rendered as clickable pills right under this message,
-    // instead of forcing the person back to open free text every turn.
-    let suggestOptions = [];
-    const suggestMatch = reply.match(/\[SUGGEST:\s*([^\]]+)\]/i);
-    if (suggestMatch) {
-      suggestOptions = suggestMatch[1].split('|').map(s => s.trim()).filter(Boolean).slice(0, 5);
-      reply = reply.replace(suggestMatch[0], '').trim();
-    }
-
     const replyId = 'reply-' + Date.now();
     log.insertAdjacentHTML('beforeend', `<div id="${replyId}" class="bg-navy-card rounded-md p-3 text-sand/90 text-sm"></div>`);
     typewrite(document.getElementById(replyId), reply, log, () => {
-      if (suggestOptions.length) {
-        const pillsHtml = `<div class="flex flex-wrap gap-2 mt-1">${suggestOptions.map(opt =>
-          `<button type="button" onclick="chatChip(${JSON.stringify(opt)})" class="text-sand/80 text-xs border border-gold/30 rounded-full px-3 py-1.5 hover:border-gold hover:bg-gold hover:text-navy transition">${opt}</button>`
-        ).join('')}</div>`;
-        log.insertAdjacentHTML('beforeend', pillsHtml);
-        log.scrollTop = log.scrollHeight;
-      }
       if (shouldCapture && !conciergeLeadCaptured) renderInlineCapture(log);
-      // Property cards render inside the conversation itself -- not a
-      // separate grid the person has to scroll away to find. Compact,
-      // capped at 3 (with a link to see the rest), same compliance
-      // elements (courtesy line, MLS#, View Details) as everywhere else.
+      // If the concierge's search tool found real matches, show them where
+      // the rest of the page's listings already render -- same cards, same
+      // "Contact us" button, same compliance elements -- not a separate UI.
       if (data.listings && data.listings.length) {
-        const shown = data.listings.slice(0, 3);
-        const cardsHtml = `<div class="grid grid-cols-1 gap-3 mt-1">${shown.map(renderIdxCard).join('')}</div>` +
-          (data.listings.length > 3
-            ? `<a href="/listings.html" class="block text-center text-sand/70 text-xs mt-2 hover:text-gold transition">View all ${data.listings.length} homes →</a>`
-            : '');
-        log.insertAdjacentHTML('beforeend', cardsHtml);
-        log.scrollTop = log.scrollHeight;
+        const grid = document.getElementById('listing-grid');
+        grid.innerHTML = `<p class="col-span-full font-serif text-lg text-navy mb-1">Current listings matching what you described:</p>` +
+          data.listings.map(renderIdxCard).join('') + idxDisclaimerHtml();
+        grid.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
-      // Save the session snapshot here, not synchronously after starting
-      // typewrite() -- typewrite is asynchronous (requestAnimationFrame/
-      // setTimeout) and returns immediately, so saving right after calling
-      // it was capturing the chat log mid-animation, sometimes freezing a
-      // conversation at just 1-2 revealed characters if the page reloaded
-      // before the animation finished. Saving here, after everything (text,
-      // suggestion pills, property cards) has actually finished rendering,
-      // fixes that.
-      saveConciergeSession();
     });
 
     chatHistory.push({ role: 'user', content: text });
     chatHistory.push({ role: 'assistant', content: reply });
     if (chatHistory.length > 12) chatHistory = chatHistory.slice(-12);
+    saveConciergeSession();
   } catch (e) {
     document.getElementById(thinkingId).outerHTML = `<div class="bg-navy-card rounded-md p-3 text-sand/90 text-sm">I'm having trouble connecting right now — let me get a specialist to reach out instead.</div>`;
     openLeadForm('buyer');
@@ -1205,7 +1108,7 @@ let leadSource = 'buyer';
 let leadContextMessage = '';
 function openLeadForm(source, contextMessage) {
   leadSource = source;
-  leadContextMessage = contextMessage || '';
+  leadContextMessage = contextMessage || (source === 'get-matched' ? wizardMessage : '');
   const titles = { seller: 'Request a valuation', 'get-matched': 'Get matched with a specialist', 'property-inquiry': 'Contact us about this home' };
   document.getElementById('lead-title').textContent = titles[source] || 'Talk to a specialist';
   document.getElementById('lead-form-view').classList.remove('hidden');
