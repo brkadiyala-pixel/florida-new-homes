@@ -267,7 +267,7 @@ const RESO_SELECT_FIELDS = [
   'AssociationFee', 'AssociationFeeFrequency'
 ].join(',');
 
-function buildResoFilter({ city, minPrice, maxPrice, beds, propertyType }) {
+function buildResoFilter({ city, minPrice, maxPrice, beds, propertyType, subdivision }) {
   const filters = [`StandardStatus eq 'Active'`];
   if (city) filters.push(`City eq '${city.replace(/'/g, "''")}'`);
   if (minPrice) filters.push(`ListPrice ge ${Number(minPrice)}`);
@@ -287,6 +287,19 @@ function buildResoFilter({ city, minPrice, maxPrice, beds, propertyType }) {
       .map(name => `contains(SubdivisionName,'${name.replace(/'/g, "''")}')`)
       .join(' or ');
     filters.push(`(${golfFilter})`);
+  }
+  // Exact-match subdivision filter, used by the new-developments page CTAs to
+  // link straight to that specific development's real active inventory.
+  // Supports multiple pipe-separated values (e.g. a development whose
+  // listings might be tagged under either of two legal plat names) --
+  // exact match rather than contains() since these come from real,
+  // human-verified MLS subdivision values, not a guessed keyword.
+  if (subdivision) {
+    const names = subdivision.split('|').map(s => s.trim()).filter(Boolean);
+    const subFilter = names
+      .map(name => `SubdivisionName eq '${name.replace(/'/g, "''")}'`)
+      .join(' or ');
+    if (subFilter) filters.push(`(${subFilter})`);
   }
   return filters.join(' and ');
 }
@@ -352,13 +365,14 @@ async function handleListings(request, env) {
   const maxPrice = url.searchParams.get('maxPrice');
   const beds = url.searchParams.get('beds');
   const propertyType = url.searchParams.get('propertyType');
+  const subdivision = url.searchParams.get('subdivision');
   const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
   const pageSize = Math.min(50, Number(url.searchParams.get('pageSize')) || 12);
 
   try {
     const result = await queryResoWithCache(
       env,
-      { city, minPrice, maxPrice, beds, propertyType },
+      { city, minPrice, maxPrice, beds, propertyType, subdivision },
       pageSize,
       (page - 1) * pageSize
     );
