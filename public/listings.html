@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search Homes | Luxury Redefined Palm Beach</title>
+<meta name="description" content="Search current luxury listings across Palm Beach County via BeachesMLS — waterfront estates, golf community residences, and new construction in Palm Beach, Jupiter, Boca Raton, and Manalapan.">
+<link rel="canonical" href="https://luxuryredefined.homes/listings.html">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          navy: { DEFAULT: '#0f1720', deep: '#0a0f16', card: '#1a2532', line: '#2a3644' },
+          gold: { DEFAULT: '#c9a86a', light: '#e8d9b8', dim: '#8b7847' },
+          sand: '#f4ede1'
+        },
+        fontFamily: {
+          serif: ['Playfair Display', 'serif'],
+          sans: ['Inter', 'sans-serif']
+        }
+      }
+    }
+  }
+</script>
+<style>
+  html { scroll-padding-top: 140px; }
+  body { font-family: 'Inter', sans-serif; }
+  h1, h2, h3, .font-serif { font-family: 'Playfair Display', serif; }
+  .photo-block { position: relative; overflow: hidden; background: #0f1720; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: #2a3644; border-radius: 3px; }
+</style>
+</head>
+<body class="bg-[#f8f6f1] text-navy">
+
+<!-- ================= NAV ================= -->
+<nav class="fixed top-0 w-full z-50 bg-navy-deep/95 backdrop-blur border-b border-navy-line">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <a href="index.html" class="flex items-center gap-3">
+      <img src="DaltonWade_Logo.png" alt="Dalton Wade Real Estate Group" class="h-12 w-auto bg-white rounded-sm px-2 py-1.5">
+      <div>
+        <p class="font-serif text-gold text-lg tracking-wide leading-none">Luxury Redefined</p>
+        <p class="text-xs text-sand/70 tracking-[0.15em] mt-1">PALM BEACH · DALTON WADE REAL ESTATE GROUP</p>
+      </div>
+    </a>
+    <div class="hidden md:flex items-center gap-7 text-sm text-sand/80">
+      <a href="listings.html" class="text-gold">Search</a>
+      <a href="index.html#regions" class="hover:text-gold transition">Communities</a>
+      <a href="clubs.html" class="hover:text-gold transition">Private clubs</a>
+      <a href="new-developments.html" class="hover:text-gold transition">New developments</a>
+      <a href="index.html#insights" class="hover:text-gold transition">Insights</a>
+      <a href="about.html" class="hover:text-gold transition">About</a>
+      <a href="contact.html" class="hover:text-gold transition">Contact</a>
+    </div>
+    <a href="tel:8135506772" class="text-sm text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold hover:text-navy transition">(813) 550-6772</a>
+  </div>
+</nav>
+
+<!-- ================= HEADER + FILTERS ================= -->
+<header class="bg-navy-deep pt-32 pb-10 px-6">
+  <div class="max-w-7xl mx-auto">
+    <p class="text-gold text-xs tracking-[0.25em] uppercase mb-3">Search</p>
+    <h1 class="font-serif text-4xl md:text-5xl text-sand mb-8 leading-tight">Current listings across Palm Beach County</h1>
+
+    <div class="bg-sand rounded-sm p-5 grid grid-cols-2 md:grid-cols-5 gap-4 shadow-2xl">
+      <div>
+        <label class="text-[11px] uppercase tracking-wide text-navy/50">Region</label>
+        <select id="f-region" class="w-full bg-transparent border-b border-navy/20 py-2 text-sm focus:outline-none focus:border-gold">
+          <option>Any community</option>
+          <option>Palm Beach</option>
+          <option>Jupiter</option>
+          <option>Boca Raton</option>
+          <option>Manalapan</option>
+          <option>Delray Beach</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[11px] uppercase tracking-wide text-navy/50">Price</label>
+        <!-- Defaults to $2M+ rather than "Any price" -- keeps first impression
+             on-brand for a luxury-positioned site, while "Any price" remains
+             one click away for anyone who genuinely wants full inventory. -->
+        <select id="f-price" class="w-full bg-transparent border-b border-navy/20 py-2 text-sm focus:outline-none focus:border-gold">
+          <option>Any price</option>
+          <option>$1M – $2M</option>
+          <option selected>$2M – $5M</option>
+          <option>$5M – $10M</option>
+          <option>$10M+</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[11px] uppercase tracking-wide text-navy/50">Beds</label>
+        <select id="f-beds" class="w-full bg-transparent border-b border-navy/20 py-2 text-sm focus:outline-none focus:border-gold">
+          <option>Any</option><option>3+</option><option>4+</option><option>5+</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[11px] uppercase tracking-wide text-navy/50">Property type</label>
+        <select id="f-type" class="w-full bg-transparent border-b border-navy/20 py-2 text-sm focus:outline-none focus:border-gold">
+          <option>Any type</option><option>Waterfront</option><option>Golf community</option><option>Condo</option>
+        </select>
+      </div>
+      <button onclick="runSearch(1)" class="bg-navy text-sand rounded-sm py-2 text-sm font-medium hover:bg-navy-card transition self-end">Search</button>
+    </div>
+  </div>
+</header>
+
+<!-- ================= RESULTS ================= -->
+<section class="max-w-7xl mx-auto px-6 py-12">
+  <p id="results-summary" class="text-sm text-navy/50 mb-6"></p>
+  <div id="listing-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <p class="col-span-full text-center text-navy/50 py-12">Loading current listings...</p>
+  </div>
+  <div id="pagination" class="flex items-center justify-center gap-4 mt-10"></div>
+</section>
+
+<!-- ================= LEAD MODAL ================= -->
+<div id="lead-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6">
+  <div class="bg-sand rounded-sm p-8 max-w-md w-full relative">
+    <button onclick="closeLeadForm()" class="absolute top-4 right-4 text-navy/50 hover:text-navy" aria-label="Close">✕</button>
+    <div id="lead-form-view">
+      <h3 class="font-serif text-2xl mb-2">Talk to a specialist</h3>
+      <p class="text-sm text-navy/60 mb-5">Tell us a bit about you and a Florida luxury specialist will follow up.</p>
+      <div class="space-y-3">
+        <input id="lead-name" type="text" placeholder="Full name" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
+        <input id="lead-email" type="email" placeholder="Email address" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
+        <input id="lead-phone" type="tel" placeholder="Phone number" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
+        <p class="text-xs text-navy/40 leading-snug">By submitting, you consent to be contacted by Bharath Kadiyala / Dalton Wade Real Estate Group by phone, text, and email regarding your real estate inquiry, including by automated means. Consent is not a condition of purchase. See our <a href="legal/privacy-policy.html" class="underline hover:text-gold-dim" target="_blank">Privacy Policy</a>.</p>
+        <button onclick="submitLead()" class="w-full bg-navy text-sand py-3 rounded-sm text-sm font-medium hover:bg-navy-card transition">Submit</button>
+        <p id="lead-status" class="text-xs text-navy/50 text-center"></p>
+      </div>
+    </div>
+    <div id="lead-confirm-view" class="hidden">
+      <div class="w-12 h-12 rounded-full bg-gold/20 flex items-center justify-center mb-4"><span class="text-gold text-2xl">✓</span></div>
+      <h3 class="font-serif text-2xl mb-2">Got it, <span id="confirm-name"></span></h3>
+      <p class="text-sm text-navy/60 mb-4">A specialist will reach out shortly.</p>
+      <button onclick="closeLeadForm()" class="w-full bg-navy text-sand py-3 rounded-sm text-sm font-medium hover:bg-navy-card transition">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= FOOTER ================= -->
+<footer class="bg-navy-deep text-sand/70 px-6 py-14 mt-10">
+  <div class="max-w-7xl mx-auto">
+    <img src="DaltonWade_Logo.png" alt="Dalton Wade Real Estate Group" class="h-9 w-auto bg-white rounded-sm px-2 py-1.5 mb-4">
+    <p class="text-sm text-sand/80">Bharath Kadiyala, Broker &nbsp;·&nbsp; License #BK3462426 &nbsp;·&nbsp; Dalton Wade Real Estate Group, Florida Firm License #CQ1047837</p>
+    <p class="text-sm text-sand/60 mt-1">1st Ave S, Ste 200, St. Petersburg, FL 33701 &nbsp;·&nbsp; Office: (888) 668-8283</p>
+    <div class="flex flex-wrap gap-4 mt-4 text-xs text-sand/40">
+      <a href="legal/privacy-policy.html" class="hover:text-gold">Privacy Policy</a>
+      <a href="legal/terms-of-use.html" class="hover:text-gold">Terms of Use</a>
+      <a href="legal/fair-housing.html" class="hover:text-gold">Fair Housing</a>
+      <a href="legal/accessibility.html" class="hover:text-gold">Accessibility</a>
+    </div>
+  </div>
+  <p class="text-center text-xs text-sand/30 mt-10">© 2026 Luxury Redefined Palm Beach. All rights reserved.</p>
+</footer>
+
+<script>
+/* =====================================================================
+   FULL IDX SEARCH PAGE
+   Calls the real /api/listings endpoint. Renders BeachesMLS-required
+   compliance elements on every result: listing office attribution
+   (Section 20.3.3), BeachesMLS logo + disclaimer (Section 20.3.6/20.3.7).
+   Paginates properly rather than hard-capping results low, per Section
+   20.3.8's minimum access requirement.
+   ===================================================================== */
+const PAGE_SIZE = 12;
+
+function renderIdxCard(raw) {
+  const addr = raw.UnparsedAddress || [raw.City, raw.StateOrProvince].filter(Boolean).join(', ') || 'Address available on request';
+  const price = raw.ListPrice ? `$${Number(raw.ListPrice).toLocaleString('en-US')}` : 'Price on request';
+  const beds = raw.BedroomsTotal ?? '—';
+  const baths = raw.BathroomsTotalInteger ?? '—';
+  const sqft = raw.LivingArea ? Number(raw.LivingArea).toLocaleString('en-US') : '—';
+  const photo = raw.Media && raw.Media.length ? raw.Media[0].MediaURL : null;
+  const officeName = raw.ListOfficeName || 'Listing office not provided';
+  const officeContact = raw.ListAgentEmail || raw.ListAgentDirectPhone || raw.ListOfficePhone || '';
+
+  const media = photo
+    ? `<div class="photo-block h-52"><img src="${photo}" alt="${addr}" class="w-full h-full object-cover" loading="lazy"></div>`
+    : `<div class="photo-block h-52 flex items-center justify-center text-sand/30 text-xs">Photo unavailable</div>`;
+
+  return `
+    <div class="border border-navy/10 rounded-sm overflow-hidden hover:shadow-lg transition bg-white">
+      ${media}
+      <div class="p-4">
+        <p class="font-serif text-xl text-gold-dim">${price}</p>
+        <p class="text-sm mt-1">${addr}</p>
+        <p class="text-xs text-navy/50 mt-1">${beds} Beds &nbsp;|&nbsp; ${baths} Baths &nbsp;|&nbsp; ${sqft} Sq Ft</p>
+        <p class="text-xs text-navy/70 mt-2 pt-2 border-t border-navy/10">Listing courtesy of: ${officeName}${officeContact ? ' &middot; ' + officeContact : ''}</p>
+      </div>
+    </div>`;
+}
+
+function idxDisclaimerHtml() {
+  return `
+    <div class="col-span-full mt-6 pt-6 border-t border-navy/10 flex flex-col md:flex-row items-start md:items-center gap-4">
+      <img src="images/beachesmls-logo.png" alt="BeachesMLS" class="h-6 w-auto">
+      <p class="text-[11px] text-navy/50 leading-snug max-w-2xl">All listings featuring the BMLS logo are provided by BeachesMLS, Inc. This information is not verified for authenticity or accuracy and is not guaranteed. IDX information is provided exclusively for consumers' personal, non-commercial use and may not be used for any purpose other than to identify prospective properties consumers may be interested in purchasing. Data is deemed reliable but is not guaranteed accurate by BeachesMLS.</p>
+    </div>`;
+}
+
+function buildParams(page) {
+  const region = document.getElementById('f-region').value;
+  const price = document.getElementById('f-price').value;
+  const beds = document.getElementById('f-beds').value;
+  const type = document.getElementById('f-type').value;
+
+  const params = new URLSearchParams();
+  if (region && region !== 'Any community') params.set('city', region);
+  if (beds && beds !== 'Any') params.set('beds', beds.replace('+', ''));
+  if (type && type !== 'Any type') params.set('propertyType', type);
+  if (price === '$1M – $2M') { params.set('minPrice', '1000000'); params.set('maxPrice', '2000000'); }
+  else if (price === '$2M – $5M') { params.set('minPrice', '2000000'); params.set('maxPrice', '5000000'); }
+  else if (price === '$5M – $10M') { params.set('minPrice', '5000000'); params.set('maxPrice', '10000000'); }
+  else if (price === '$10M+') { params.set('minPrice', '10000000'); }
+  params.set('page', String(page));
+  params.set('pageSize', String(PAGE_SIZE));
+  return params;
+}
+
+function renderPagination(page, total) {
+  const totalPages = total ? Math.ceil(total / PAGE_SIZE) : page;
+  const pagDiv = document.getElementById('pagination');
+  if (totalPages <= 1) { pagDiv.innerHTML = ''; return; }
+
+  let html = '';
+  if (page > 1) html += `<button onclick="runSearch(${page - 1})" class="text-sm text-navy/70 hover:text-gold transition">← Previous</button>`;
+  html += `<span class="text-sm text-navy/50">Page ${page}${totalPages ? ' of ' + totalPages : ''}</span>`;
+  if (page < totalPages) html += `<button onclick="runSearch(${page + 1})" class="text-sm text-navy/70 hover:text-gold transition">Next →</button>`;
+  pagDiv.innerHTML = html;
+}
+
+async function runSearch(page) {
+  const grid = document.getElementById('listing-grid');
+  const summary = document.getElementById('results-summary');
+  grid.innerHTML = '<p class="col-span-full text-center text-navy/50 py-12">Searching current listings...</p>';
+  document.getElementById('pagination').innerHTML = '';
+
+  try {
+    const res = await fetch('/api/listings?' + buildParams(page).toString());
+    const data = await res.json();
+
+    if (!res.ok) {
+      grid.innerHTML = `<p class="col-span-full text-center text-navy/50 py-12">Search is temporarily unavailable. Please <button onclick="openLeadForm()" class="underline hover:text-gold">tell us what you're looking for</button> and a specialist will follow up.</p>`;
+      summary.textContent = '';
+      return;
+    }
+
+    if (!data.listings || !data.listings.length) {
+      grid.innerHTML = `<p class="col-span-full text-center text-navy/50 py-12">No current listings match those filters. <button onclick="openLeadForm()" class="underline hover:text-gold">Tell us what you're looking for</button> and we'll reach out when something fits.</p>`;
+      summary.textContent = '';
+      return;
+    }
+
+    summary.textContent = data.total != null ? `${data.total.toLocaleString('en-US')} listings found` : '';
+    grid.innerHTML = data.listings.map(renderIdxCard).join('') + idxDisclaimerHtml();
+    renderPagination(page, data.total);
+    window.scrollTo({ top: document.getElementById('listing-grid').offsetTop - 120, behavior: 'smooth' });
+  } catch (err) {
+    grid.innerHTML = `<p class="col-span-full text-center text-navy/50 py-12">Search is temporarily unavailable. Please <button onclick="openLeadForm()" class="underline hover:text-gold">tell us what you're looking for</button> and a specialist will follow up.</p>`;
+    summary.textContent = '';
+  }
+}
+
+/* =====================================================================
+   LEAD FORM
+   ===================================================================== */
+function openLeadForm() {
+  document.getElementById('lead-form-view').classList.remove('hidden');
+  document.getElementById('lead-confirm-view').classList.add('hidden');
+  document.getElementById('lead-status').textContent = '';
+  document.getElementById('lead-modal').classList.remove('hidden');
+}
+function closeLeadForm() {
+  document.getElementById('lead-modal').classList.add('hidden');
+  document.getElementById('lead-name').value = '';
+  document.getElementById('lead-email').value = '';
+  document.getElementById('lead-phone').value = '';
+}
+async function submitLead() {
+  const name = document.getElementById('lead-name').value;
+  const email = document.getElementById('lead-email').value;
+  const phone = document.getElementById('lead-phone').value;
+  const lead = { name, email, phone, source: 'listings-page', site: 'luxuryredefined.homes' };
+  const status = document.getElementById('lead-status');
+  if (!lead.name || !lead.email) { status.textContent = 'Please enter your name and email.'; return; }
+  status.textContent = 'Submitting...';
+  try {
+    const res = await fetch('/api/lead', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead) });
+    if (!res.ok) throw new Error('Request failed');
+    const firstName = name.trim().split(' ')[0];
+    document.getElementById('confirm-name').textContent = firstName;
+    document.getElementById('lead-form-view').classList.add('hidden');
+    document.getElementById('lead-confirm-view').classList.remove('hidden');
+  } catch (err) {
+    status.textContent = 'Something went wrong. Please call (813) 550-6772.';
+  }
+}
+
+// Initial load
+runSearch(1);
+</script>
+</body>
+</html>
