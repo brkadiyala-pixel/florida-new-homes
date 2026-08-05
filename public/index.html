@@ -189,7 +189,7 @@
         <div class="bg-navy-card rounded-md p-3 text-sand/90 text-sm">What are you looking for?</div>
       </div>
 
-      <div class="flex flex-wrap gap-2 mb-4">
+      <div id="starter-chips" class="flex flex-wrap gap-2 mb-4">
         <button type="button" onclick="chatChip('Waterfront home')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Waterfront</button>
         <button type="button" onclick="chatChip('Golf community home')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Golf</button>
         <button type="button" onclick="chatChip('New construction home')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">New Construction</button>
@@ -861,6 +861,16 @@ async function sendChat() {
   input.value = '';
   log.scrollTop = log.scrollHeight;
 
+  // Hide the static starter chips (Waterfront/Golf/etc.) once the
+  // conversation actually starts. Leaving them visible caused a real UX
+  // problem: once the AI offers its own [SUGGEST] follow-up buttons inside
+  // the chat log, two visually similar rows of small pill buttons sat right
+  // next to each other, and it was easy to tap the wrong one -- e.g. tapping
+  // the static "Waterfront" chip again instead of a follow-up option like
+  // "Direct oceanfront," silently resetting the conversation.
+  const starterChips = document.getElementById('starter-chips');
+  if (starterChips) starterChips.style.display = 'none';
+
   const thinkingId = 'thinking-' + Date.now();
   log.insertAdjacentHTML('beforeend', `<div id="${thinkingId}" class="bg-navy-card rounded-md p-3 text-sand/50 text-sm">Thinking…</div>`);
   log.scrollTop = log.scrollHeight;
@@ -1003,6 +1013,8 @@ function restoreConciergeSession() {
       chatHistory = JSON.parse(savedHistory);
       document.getElementById('chat-log').innerHTML = savedLog;
       conciergeLeadCaptured = sessionStorage.getItem('concierge-lead-captured') === '1';
+      const starterChips = document.getElementById('starter-chips');
+      if (starterChips) starterChips.style.display = 'none';
     }
   } catch (e) { /* nothing to restore */ }
 }

@@ -377,7 +377,18 @@ async function getFeaturedListings(env) {
     const cacheKey = `idx-cache:featured`;
     if (env.REPORTS_KV) {
       const cached = await env.REPORTS_KV.get(cacheKey);
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        // Don't trust a cached value just because it exists -- a stale
+        // empty array ("[]") written before this check existed would
+        // otherwise be treated as valid and returned indefinitely until
+        // its TTL happened to expire. Only short-circuit on genuinely
+        // non-empty cached data; anything else falls through to a fresh
+        // live query below.
+        try {
+          const parsedCache = JSON.parse(cached);
+          if (Array.isArray(parsedCache) && parsedCache.length) return parsedCache;
+        } catch { /* fall through to a fresh query */ }
+      }
     }
 
     const cityFilter = cities.map(c => `City eq '${c}'`).join(' or ');
