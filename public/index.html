@@ -1109,12 +1109,20 @@ async function sendChat() {
         log.insertAdjacentHTML('beforeend', cardsHtml);
         log.scrollTop = log.scrollHeight;
       }
+      // Save the session snapshot here, not synchronously after starting
+      // typewrite() -- typewrite is asynchronous (requestAnimationFrame/
+      // setTimeout) and returns immediately, so saving right after calling
+      // it was capturing the chat log mid-animation, sometimes freezing a
+      // conversation at just 1-2 revealed characters if the page reloaded
+      // before the animation finished. Saving here, after everything (text,
+      // suggestion pills, property cards) has actually finished rendering,
+      // fixes that.
+      saveConciergeSession();
     });
 
     chatHistory.push({ role: 'user', content: text });
     chatHistory.push({ role: 'assistant', content: reply });
     if (chatHistory.length > 12) chatHistory = chatHistory.slice(-12);
-    saveConciergeSession();
   } catch (e) {
     document.getElementById(thinkingId).outerHTML = `<div class="bg-navy-card rounded-md p-3 text-sand/90 text-sm">I'm having trouble connecting right now — let me get a specialist to reach out instead.</div>`;
     openLeadForm('buyer');
