@@ -1593,6 +1593,7 @@ export default {
       } catch (err) {
         return json({ testedMlsId: mlsId, error: String(err) }, 500);
       }
+    }
 
     // Server-render real IDX listings into the homepage at request time --
     // both AI crawlers (no JS execution) and real visitors see live data
