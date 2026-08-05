@@ -1553,6 +1553,47 @@ export default {
       }
     }
 
+    if (request.method === 'GET' && url.pathname === '/admin/debug/listing-by-mls-id') {
+      if (!checkAdminAuth(request, env)) return requireAdminAuth();
+      if (!env.SPARK_ACCESS_TOKEN) return json({ error: 'SPARK_ACCESS_TOKEN is not set.' }, 500);
+      const mlsId = url.searchParams.get('mls');
+      if (!mlsId) return json({ error: 'Add ?mls=R11155081 (the public MLS# from BeachesMLS) to the URL.' }, 400);
+
+      // Looks up one specific, known-active listing by its public MLS
+      // number (ListingId), completely bypassing SubdivisionName/city/any
+      // other filter. This isolates the question precisely: is this exact
+      // record reachable through our authorized IDX feed at all, or not --
+      // independent of anything to do with how we're filtering by
+      // subdivision. If this comes back empty for a listing you can see is
+      // Active with Internet: Yes in the agent-side MLS, that's strong
+      // evidence of a difference between general "Internet Display" consent
+      // and IDX-specific syndication, or a gap in this feed's coverage --
+      // both things worth raising with FBS/BeachesMLS support directly,
+      // not something guessing at filter syntax can fix.
+      const safeId = mlsId.replace(/'/g, "''");
+      const query = new URLSearchParams({
+        '$filter': `ListingId eq '${safeId}'`,
+        '$select': RESO_SELECT_FIELDS
+      });
+      const requestUrl = `${RESO_BASE_URL}?${query.toString()}`;
+      try {
+        const res = await fetch(requestUrl, {
+          headers: { Authorization: `Bearer ${env.SPARK_ACCESS_TOKEN}`, Accept: 'application/json' }
+        });
+        const bodyText = await res.text();
+        let parsedCount = null;
+        try { parsedCount = (JSON.parse(bodyText).value || []).length; } catch {}
+        return json({
+          testedMlsId: mlsId,
+          requestUrl,
+          httpStatus: res.status,
+          parsedResultCount: parsedCount,
+          rawResponseBody: bodyText.slice(0, 3000)
+        }, res.ok ? 200 : 502);
+      } catch (err) {
+        return json({ testedMlsId: mlsId, error: String(err) }, 500);
+      }
+
     // Server-render real IDX listings into the homepage at request time --
     // both AI crawlers (no JS execution) and real visitors see live data
     // in the raw HTML, not just after client-side JS runs. Falls back to
