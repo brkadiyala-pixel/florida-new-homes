@@ -194,40 +194,15 @@
       </div>
 
       <input id="chat-input" type="hidden">
-      <div id="chat-log" class="space-y-3 mb-1 max-h-56 overflow-y-auto pr-1 empty:hidden"></div>
+      <div id="chat-log" class="space-y-3 mb-1 max-h-80 overflow-y-auto pr-1 empty:hidden"></div>
 
-      <p class="text-sand/40 text-xs mt-4 mb-4">Or let me guide you:</p>
-
-      <div class="mb-5">
-        <p class="text-sand text-sm font-medium mb-1"><span class="text-gold">1</span> &nbsp;Which matters more?</p>
-        <p class="text-sand/40 text-xs mb-2">Choose up to 2</p>
-        <div class="flex flex-wrap gap-2">
-          <button type="button" onclick="togglePriority(this,'Ocean access')" class="wizard-pill text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Ocean access</button>
-          <button type="button" onclick="togglePriority(this,'Golf')" class="wizard-pill text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Golf</button>
-          <button type="button" onclick="togglePriority(this,'Walkability')" class="wizard-pill text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Walkability</button>
-          <button type="button" onclick="togglePriority(this,'Privacy')" class="wizard-pill text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Privacy</button>
-          <button type="button" onclick="togglePriority(this,'New construction')" class="wizard-pill text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">New construction</button>
-        </div>
+      <p class="text-sand/40 text-xs mt-4 mb-2">Popular searches</p>
+      <div class="flex flex-wrap gap-2 mb-5">
+        <button type="button" onclick="chatChip('Oceanfront home')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Oceanfront</button>
+        <button type="button" onclick="chatChip('Golf community home')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Golf</button>
+        <button type="button" onclick="chatChip('New construction home')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">New construction</button>
+        <button type="button" onclick="chatChip(&quot;I don't know Palm Beach County -- where should I look?&quot;)" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Help me choose an area</button>
       </div>
-
-      <div class="mb-5">
-        <p class="text-sand text-sm font-medium mb-1"><span class="text-gold">2</span> &nbsp;What price range?</p>
-        <p class="text-sand/40 text-xs mb-2">Select one</p>
-        <div class="flex flex-wrap gap-2">
-          <button type="button" onclick="selectPriceRange(this,'$2M–$5M')" class="wizard-pill-price text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">$2M–$5M</button>
-          <button type="button" onclick="selectPriceRange(this,'$5M–$10M')" class="wizard-pill-price text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">$5M–$10M</button>
-          <button type="button" onclick="selectPriceRange(this,'$10M+')" class="wizard-pill-price text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">$10M+</button>
-        </div>
-      </div>
-
-      <div class="mb-5">
-        <p class="text-sand text-sm font-medium mb-1"><span class="text-gold">3</span> &nbsp;Anything else we should know?</p>
-        <p class="text-sand/40 text-xs mb-2">Optional</p>
-        <input id="wizard-details" type="text" placeholder="e.g. 4+ bedrooms, boat dock, gated community..."
-          class="w-full bg-navy-card border border-navy-line rounded-full px-4 py-2.5 text-sand text-sm focus:outline-none focus:border-gold">
-      </div>
-
-      <button onclick="submitWizard()" class="w-full bg-gold text-navy font-medium rounded-md py-3 text-sm hover:bg-gold-light transition mb-5">Get matched →</button>
 
       <div class="border-t border-navy-line pt-4">
         <p class="text-sand/60 text-xs mb-2">Prefer personal guidance?</p>
@@ -246,7 +221,8 @@
   </div>
 
   <!-- Search bar (IDX-ready) -->
-  <div id="search" class="max-w-6xl mx-auto mt-16 bg-sand rounded-sm p-5 grid grid-cols-2 md:grid-cols-5 gap-4 shadow-2xl relative z-10">
+  <p class="max-w-6xl mx-auto mt-16 text-sand/40 text-xs uppercase tracking-[0.15em] relative z-10">Prefer to search yourself? Search manually</p>
+  <div id="search" class="max-w-6xl mx-auto mt-3 bg-sand rounded-sm p-5 grid grid-cols-2 md:grid-cols-5 gap-4 shadow-2xl relative z-10">
     <div>
       <label class="text-[11px] uppercase tracking-wide text-navy/50">Region</label>
       <select id="f-region" class="w-full bg-transparent border-b border-navy/20 py-2 text-sm focus:outline-none focus:border-gold">
@@ -991,72 +967,6 @@ function closeRebateCalculator() {
   document.getElementById('rebate-modal').classList.add('hidden');
 }
 
-/* Guided wizard state — composes a natural-language message from the
-   selections and sends it through the same /api/concierge pipeline as
-   free-text chat, so there's one response path regardless of how the
-   person got there. */
-let wizardPriorities = [];
-let wizardPriceRange = null;
-
-function togglePriority(el, label) {
-  const idx = wizardPriorities.indexOf(label);
-  if (idx > -1) {
-    wizardPriorities.splice(idx, 1);
-    el.classList.remove('selected');
-  } else {
-    if (wizardPriorities.length >= 2) return;
-    wizardPriorities.push(label);
-    el.classList.add('selected');
-  }
-}
-
-function selectPriceRange(el, label) {
-  document.querySelectorAll('.wizard-pill-price').forEach(p => p.classList.remove('selected'));
-  if (wizardPriceRange === label) { wizardPriceRange = null; return; }
-  wizardPriceRange = label;
-  el.classList.add('selected');
-}
-
-let wizardMessage = '';
-async function submitWizard() {
-  const details = document.getElementById('wizard-details').value.trim();
-  const parts = [];
-  if (wizardPriorities.length) parts.push(wizardPriorities.join(' and '));
-  if (wizardPriceRange) parts.push(`in the ${wizardPriceRange} range`);
-  let message = parts.length ? `I'm looking for a home with ${parts.join(', ')}.` : "I'm exploring luxury homes in Palm Beach County.";
-  if (details) message += ` Additional details: ${details}.`;
-  wizardMessage = message;
-  document.getElementById('chat-input').value = message;
-  sendChat();
-
-  // Build a real search from what's actually structured/filterable. Two of
-  // the five priority chips ("Walkability", "Privacy") and "New construction"
-  // have no reliable MLS field to filter on directly -- rather than pretend
-  // otherwise, only "Ocean access" (-> Waterfront) and "Golf" map to an
-  // actual query filter. Everything selected still goes to the specialist
-  // via wizardMessage regardless of what the automated search could use.
-  const params = new URLSearchParams();
-  if (wizardPriorities.includes('Ocean access')) params.set('propertyType', 'Waterfront');
-  else if (wizardPriorities.includes('Golf')) params.set('propertyType', 'Golf community');
-
-  if (wizardPriceRange === '$2M–$5M') { params.set('minPrice', '2000000'); params.set('maxPrice', '5000000'); }
-  else if (wizardPriceRange === '$5M–$10M') { params.set('minPrice', '5000000'); params.set('maxPrice', '10000000'); }
-  else if (wizardPriceRange === '$10M+') { params.set('minPrice', '10000000'); }
-
-  // Best-effort: pull a bed count out of the free-text "anything else" field
-  // (e.g. "4 bed", "4+ bedrooms") since that field isn't a structured input.
-  const bedMatch = details.match(/(\d+)\s*\+?\s*bed/i);
-  if (bedMatch) params.set('beds', bedMatch[1]);
-
-  const priorityLabel = wizardPriorities.length ? wizardPriorities.join(' + ') : 'your criteria';
-  const found = await performIdxSearch(params, { headline: `Current listings matching ${priorityLabel}:` });
-
-  // Whether or not automated matches were found, still offer specialist
-  // follow-up -- especially important for the priorities (walkability,
-  // privacy, new construction) an MLS query can't actually filter on.
-  openLeadForm('get-matched');
-}
-
 function quickSearch() {
   const input = document.getElementById('quick-search-input');
   const text = input.value.trim();
@@ -1165,18 +1075,39 @@ async function sendChat() {
       reply = reply.replace('[CAPTURE_LEAD]', '').trim();
     }
 
+    // Parse the quick-reply button marker: "[SUGGEST: A | B | C]" -- up to
+    // 5 short options rendered as clickable pills right under this message,
+    // instead of forcing the person back to open free text every turn.
+    let suggestOptions = [];
+    const suggestMatch = reply.match(/\[SUGGEST:\s*([^\]]+)\]/i);
+    if (suggestMatch) {
+      suggestOptions = suggestMatch[1].split('|').map(s => s.trim()).filter(Boolean).slice(0, 5);
+      reply = reply.replace(suggestMatch[0], '').trim();
+    }
+
     const replyId = 'reply-' + Date.now();
     log.insertAdjacentHTML('beforeend', `<div id="${replyId}" class="bg-navy-card rounded-md p-3 text-sand/90 text-sm"></div>`);
     typewrite(document.getElementById(replyId), reply, log, () => {
+      if (suggestOptions.length) {
+        const pillsHtml = `<div class="flex flex-wrap gap-2 mt-1">${suggestOptions.map(opt =>
+          `<button type="button" onclick="chatChip(${JSON.stringify(opt)})" class="text-sand/80 text-xs border border-gold/30 rounded-full px-3 py-1.5 hover:border-gold hover:bg-gold hover:text-navy transition">${opt}</button>`
+        ).join('')}</div>`;
+        log.insertAdjacentHTML('beforeend', pillsHtml);
+        log.scrollTop = log.scrollHeight;
+      }
       if (shouldCapture && !conciergeLeadCaptured) renderInlineCapture(log);
-      // If the concierge's search tool found real matches, show them where
-      // the rest of the page's listings already render -- same cards, same
-      // "Contact us" button, same compliance elements -- not a separate UI.
+      // Property cards render inside the conversation itself -- not a
+      // separate grid the person has to scroll away to find. Compact,
+      // capped at 3 (with a link to see the rest), same compliance
+      // elements (courtesy line, MLS#, View Details) as everywhere else.
       if (data.listings && data.listings.length) {
-        const grid = document.getElementById('listing-grid');
-        grid.innerHTML = `<p class="col-span-full font-serif text-lg text-navy mb-1">Current listings matching what you described:</p>` +
-          data.listings.map(renderIdxCard).join('') + idxDisclaimerHtml();
-        grid.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        const shown = data.listings.slice(0, 3);
+        const cardsHtml = `<div class="grid grid-cols-1 gap-3 mt-1">${shown.map(renderIdxCard).join('')}</div>` +
+          (data.listings.length > 3
+            ? `<a href="/listings.html" class="block text-center text-sand/70 text-xs mt-2 hover:text-gold transition">View all ${data.listings.length} homes →</a>`
+            : '');
+        log.insertAdjacentHTML('beforeend', cardsHtml);
+        log.scrollTop = log.scrollHeight;
       }
     });
 
@@ -1266,7 +1197,7 @@ let leadSource = 'buyer';
 let leadContextMessage = '';
 function openLeadForm(source, contextMessage) {
   leadSource = source;
-  leadContextMessage = contextMessage || (source === 'get-matched' ? wizardMessage : '');
+  leadContextMessage = contextMessage || '';
   const titles = { seller: 'Request a valuation', 'get-matched': 'Get matched with a specialist', 'property-inquiry': 'Contact us about this home' };
   document.getElementById('lead-title').textContent = titles[source] || 'Talk to a specialist';
   document.getElementById('lead-form-view').classList.remove('hidden');
