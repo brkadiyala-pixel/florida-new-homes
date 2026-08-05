@@ -256,11 +256,12 @@ const RESO_BASE_URL = 'https://replication.sparkapi.com/Version/3/Reso/OData/Pro
 // listing firm + contact; 20.3.1: only MLS-designated public fields; never
 // showing instructions, private remarks, or seller/occupant info).
 const RESO_SELECT_FIELDS = [
-  'ListingKey', 'UnparsedAddress', 'City', 'StateOrProvince', 'PostalCode',
+  'ListingKey', 'ListingId', 'UnparsedAddress', 'City', 'StateOrProvince', 'PostalCode',
   'ListPrice', 'BedroomsTotal', 'BathroomsTotalInteger', 'LivingArea',
   'PropertyType', 'PropertySubType', 'WaterfrontYN', 'SubdivisionName',
   'StandardStatus', 'ListOfficeName', 'ListAgentEmail', 'ListAgentDirectPhone',
-  'ListOfficePhone', 'ModificationTimestamp'
+  'ListOfficePhone', 'ModificationTimestamp', 'DaysOnMarket',
+  'AssociationFee', 'AssociationFeeFrequency'
 ].join(',');
 
 function buildResoFilter({ city, minPrice, maxPrice, beds, propertyType }) {
@@ -415,29 +416,73 @@ async function getFeaturedListings(env) {
      - Section 20.3.6: BeachesMLS logo as source attribution
    Section 20.3.7's sitewide disclaimer text lives once near the listings
    section (see renderIdxDisclaimer), not repeated per-card. */
+// Shared across all three card renderers (server here, and the two client
+// copies in index.html / listings.html): Media arrays from Spark can
+// include non-photo entries (e.g. "Unbranded Virtual Tour" pointing to a
+// propertypanorama.com link, not an image) mixed in alongside actual
+// photos -- filtering to MediaCategory === 'Photo' avoids a broken image
+// showing up mid-carousel.
+function getListingPhotos(raw) {
+  return (raw.Media || [])
+    .filter(m => m.MediaCategory === 'Photo')
+    .sort((a, b) => (a.Order || 0) - (b.Order || 0));
+}
+
+function formatHoaFee(raw) {
+  if (!raw.AssociationFee) return null;
+  const freqMap = { Monthly: '/mo', Annually: '/yr', Quarterly: '/qtr', 'Semi-Annually': '/6mo' };
+  const freq = freqMap[raw.AssociationFeeFrequency] || '';
+  return `$${Number(raw.AssociationFee).toLocaleString('en-US')}${freq}`;
+}
+
 function renderIdxListingCard(raw) {
   const addr = raw.UnparsedAddress || [raw.City, raw.StateOrProvince].filter(Boolean).join(', ') || 'Address available on request';
   const price = raw.ListPrice ? `$${Number(raw.ListPrice).toLocaleString('en-US')}` : 'Price on request';
   const beds = raw.BedroomsTotal ?? '—';
   const baths = raw.BathroomsTotalInteger ?? '—';
   const sqft = raw.LivingArea ? Number(raw.LivingArea).toLocaleString('en-US') : '—';
-  const photo = raw.Media && raw.Media.length ? raw.Media[0].MediaURL : null;
   const officeName = raw.ListOfficeName || 'Listing office not provided';
   const officeContact = raw.ListAgentEmail || raw.ListAgentDirectPhone || raw.ListOfficePhone || '';
+  const mlsNum = raw.ListingId || raw.ListingKey || '—';
+  const key = raw.ListingKey;
 
-  const media = photo
-    ? `<div class="photo-block tagged h-52"><img src="${photo}" alt="${addr}" class="w-full h-full object-cover" loading="lazy"></div>`
-    : `<div class="photo-block h-52 flex items-center justify-center text-sand/30 text-xs">Photo unavailable</div>`;
+  const photos = getListingPhotos(raw);
+  const firstPhoto = photos.length ? photos[0].MediaURL : null;
+  const hoaFee = formatHoaFee(raw);
+
+  const statusBadge = raw.StandardStatus
+    ? `<span class="absolute top-3 left-3 z-10 text-[10px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-sm ${raw.StandardStatus === 'Active' ? 'bg-emerald-600 text-white' : 'bg-navy/70 text-sand'}">${raw.StandardStatus}</span>`
+    : '';
+
+  const carouselArrows = photos.length > 1
+    ? `<button onclick="cycleCarousel('${key}', -1, event)" aria-label="Previous photo" class="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-navy/60 text-sand flex items-center justify-center hover:bg-navy transition">‹</button>
+       <button onclick="cycleCarousel('${key}', 1, event)" aria-label="Next photo" class="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-navy/60 text-sand flex items-center justify-center hover:bg-navy transition">›</button>`
+    : '';
+
+  const dots = photos.length > 1
+    ? `<div class="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">${photos.slice(0, 8).map((_, i) =>
+        `<span class="dot-${key} w-1.5 h-1.5 rounded-full bg-white" style="opacity:${i === 0 ? '1' : '0.4'}"></span>`
+      ).join('')}</div>`
+    : '';
+
+  const media = firstPhoto
+    ? `<div class="photo-block tagged h-52 relative">${statusBadge}<img id="carousel-img-${key}" src="${firstPhoto}" alt="${addr}" class="w-full h-full object-cover" loading="lazy">${carouselArrows}${dots}</div>`
+    : `<div class="photo-block h-52 relative flex items-center justify-center text-sand/30 text-xs">${statusBadge}Photo unavailable</div>`;
 
   return `
-    <div class="border border-navy/10 rounded-sm overflow-hidden hover:shadow-lg transition">
+    <div class="border border-navy/10 rounded-sm overflow-hidden hover:shadow-lg transition bg-white">
       ${media}
       <div class="p-4">
-        <p class="font-serif text-xl text-gold-dim">${price}</p>
-        <p class="text-sm mt-1">${addr}</p>
-        <p class="text-xs text-navy/50 mt-1">${beds} Beds &nbsp;|&nbsp; ${baths} Baths &nbsp;|&nbsp; ${sqft} Sq Ft</p>
-        <button onclick="contactAboutListing('${raw.ListingKey}')" class="w-full mt-3 bg-navy text-sand text-xs font-medium py-2 rounded-sm hover:bg-navy-card transition">Contact us about this home</button>
-        <p class="text-[11px] text-navy/50 mt-2 pt-2 border-t border-navy/10">Listing courtesy of: ${officeName}${officeContact ? ' &middot; ' + officeContact : ''}</p>
+        <p class="font-serif text-2xl text-navy font-semibold">${price}</p>
+        <p class="text-sm text-navy/70 mt-1">${addr}</p>
+        <p class="text-sm font-medium text-navy mt-2">${beds} bd &nbsp;|&nbsp; ${baths} ba &nbsp;|&nbsp; ${sqft} sqft</p>
+        ${hoaFee ? `<p class="text-xs text-navy/50 mt-1">HOA: ${hoaFee}</p>` : ''}
+        ${raw.DaysOnMarket != null ? `<p class="text-xs text-navy/50">${raw.DaysOnMarket} days on market</p>` : ''}
+        <button onclick="contactAboutListing('${key}')" class="w-full mt-3 bg-navy text-sand text-xs font-medium py-2 rounded-sm hover:bg-navy-card transition">Contact us about this home</button>
+        <div class="flex items-center justify-between mt-2 pt-2 border-t border-navy/10">
+          <p class="text-[11px] text-navy/40">MLS# ${mlsNum}</p>
+          <p class="text-[11px] text-navy/50 text-right">Courtesy: ${officeName}${officeContact ? ' &middot; ' + officeContact : ''}</p>
+        </div>
       </div>
     </div>`;
 }
