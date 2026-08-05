@@ -297,7 +297,7 @@ function buildResoFilter({ city, minPrice, maxPrice, beds, propertyType, subdivi
   if (subdivision) {
     const names = subdivision.split('|').map(s => s.trim()).filter(Boolean);
     const subFilter = names
-      .map(name => `SubdivisionName eq '${name.replace(/'/g, "''")}'`)
+      .map(name => `tolower(SubdivisionName) eq '${name.replace(/'/g, "''").toLowerCase()}'`)
       .join(' or ');
     if (subFilter) filters.push(`(${subFilter})`);
   }
@@ -1513,6 +1513,44 @@ export default {
       if (env.REPORTS_KV) await env.REPORTS_KV.delete('idx-cache:featured');
       const featured = await getFeaturedListings(env);
       return json({ count: featured.length, listings: featured });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/admin/debug/subdivision') {
+      if (!checkAdminAuth(request, env)) return requireAdminAuth();
+      if (!env.SPARK_ACCESS_TOKEN) return json({ error: 'SPARK_ACCESS_TOKEN is not set.' }, 500);
+      const subdivision = url.searchParams.get('name');
+      if (!subdivision) return json({ error: 'Add ?name=SUBDIVISION_NAME to the URL.' }, 400);
+
+      // Calls Spark directly (case-insensitive match, same as the real
+      // filter) so you can test any subdivision value on demand -- shows
+      // the raw response and status, not a silently-swallowed empty array,
+      // so a genuine zero-listings result looks different from an actual
+      // API error.
+      const filterClause = buildResoFilter({ subdivision });
+      const query = new URLSearchParams({
+        '$filter': filterClause,
+        '$select': RESO_SELECT_FIELDS,
+        '$top': '10'
+      });
+      const requestUrl = `${RESO_BASE_URL}?${query.toString()}`;
+      try {
+        const res = await fetch(requestUrl, {
+          headers: { Authorization: `Bearer ${env.SPARK_ACCESS_TOKEN}`, Accept: 'application/json' }
+        });
+        const bodyText = await res.text();
+        let parsedCount = null;
+        try { parsedCount = (JSON.parse(bodyText).value || []).length; } catch {}
+        return json({
+          testedValue: subdivision,
+          filterClause,
+          requestUrl,
+          httpStatus: res.status,
+          parsedResultCount: parsedCount,
+          rawResponseBody: bodyText.slice(0, 3000)
+        }, res.ok ? 200 : 502);
+      } catch (err) {
+        return json({ testedValue: subdivision, filterClause, error: String(err) }, 500);
+      }
     }
 
     // Server-render real IDX listings into the homepage at request time --
