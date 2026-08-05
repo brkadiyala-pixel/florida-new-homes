@@ -1520,13 +1520,34 @@ export default {
       if (!env.SPARK_ACCESS_TOKEN) return json({ error: 'SPARK_ACCESS_TOKEN is not set.' }, 500);
       const subdivision = url.searchParams.get('name');
       if (!subdivision) return json({ error: 'Add ?name=SUBDIVISION_NAME to the URL.' }, 400);
+      const allStatuses = url.searchParams.get('allStatuses') === '1';
+      const raw = url.searchParams.get('raw') === '1';
 
       // Calls Spark directly (case-insensitive match, same as the real
       // filter) so you can test any subdivision value on demand -- shows
       // the raw response and status, not a silently-swallowed empty array,
       // so a genuine zero-listings result looks different from an actual
-      // API error.
-      const filterClause = buildResoFilter({ subdivision });
+      // API error. Add &allStatuses=1 to see listings of ANY status (not
+      // just Active) under this subdivision -- useful for checking whether
+      // a listing that was visible earlier has since gone Pending, Closed,
+      // or Withdrawn, rather than never having been IDX-eligible at all.
+      let filterClause;
+      if (allStatuses) {
+        const names = subdivision.split('|').map(s => s.trim()).filter(Boolean);
+        const subFilter = names.map(name => `tolower(SubdivisionName) eq '${name.replace(/'/g, "''").toLowerCase()}'`).join(' or ');
+        filterClause = `(${subFilter})`;
+      } else if (raw) {
+        // Plain, case-sensitive exact match -- no tolower(). Tests whether
+        // Spark's OData implementation actually supports the tolower()
+        // function at all; if this succeeds where the tolower() version
+        // fails on the exact same known-correct value, that confirms
+        // tolower() itself is the bug, not the subdivision values.
+        const names = subdivision.split('|').map(s => s.trim()).filter(Boolean);
+        const subFilter = names.map(name => `SubdivisionName eq '${name.replace(/'/g, "''")}'`).join(' or ');
+        filterClause = `StandardStatus eq 'Active' and (${subFilter})`;
+      } else {
+        filterClause = buildResoFilter({ subdivision });
+      }
       const query = new URLSearchParams({
         '$filter': filterClause,
         '$select': RESO_SELECT_FIELDS,
@@ -1539,13 +1560,20 @@ export default {
         });
         const bodyText = await res.text();
         let parsedCount = null;
-        try { parsedCount = (JSON.parse(bodyText).value || []).length; } catch {}
+        let statuses = null;
+        try {
+          const parsed = JSON.parse(bodyText).value || [];
+          parsedCount = parsed.length;
+          statuses = parsed.map(l => ({ address: l.UnparsedAddress, status: l.StandardStatus, price: l.ListPrice, modified: l.ModificationTimestamp }));
+        } catch {}
         return json({
           testedValue: subdivision,
+          allStatuses,
           filterClause,
           requestUrl,
           httpStatus: res.status,
           parsedResultCount: parsedCount,
+          statuses,
           rawResponseBody: bodyText.slice(0, 3000)
         }, res.ok ? 200 : 502);
       } catch (err) {
