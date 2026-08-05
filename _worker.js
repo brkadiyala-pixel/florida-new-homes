@@ -294,10 +294,21 @@ function buildResoFilter({ city, minPrice, maxPrice, beds, propertyType, subdivi
   // listings might be tagged under either of two legal plat names) --
   // exact match rather than contains() since these come from real,
   // human-verified MLS subdivision values, not a guessed keyword.
+  //
+  // IMPORTANT: plain exact match, NOT tolower(). Confirmed via live testing
+  // against BeachesMLS/Spark that tolower(SubdivisionName) eq '...' silently
+  // returns zero results for every value tested -- Spark's OData
+  // implementation doesn't actually support the tolower() function the way
+  // the OData v4 spec defines it, and it fails silently (no error) rather
+  // than rejecting the query. An earlier "case-insensitive" fix here was
+  // itself the bug, hiding real, active listings across every single
+  // development on the New Developments page. Since every subdivision value
+  // now comes from direct, human-verified MLS lookups (not a guess), exact
+  // case match is both correct and necessary.
   if (subdivision) {
     const names = subdivision.split('|').map(s => s.trim()).filter(Boolean);
     const subFilter = names
-      .map(name => `tolower(SubdivisionName) eq '${name.replace(/'/g, "''").toLowerCase()}'`)
+      .map(name => `SubdivisionName eq '${name.replace(/'/g, "''")}'`)
       .join(' or ');
     if (subFilter) filters.push(`(${subFilter})`);
   }
@@ -1534,7 +1545,7 @@ export default {
       let filterClause;
       if (allStatuses) {
         const names = subdivision.split('|').map(s => s.trim()).filter(Boolean);
-        const subFilter = names.map(name => `tolower(SubdivisionName) eq '${name.replace(/'/g, "''").toLowerCase()}'`).join(' or ');
+        const subFilter = names.map(name => `SubdivisionName eq '${name.replace(/'/g, "''")}'`).join(' or ');
         filterClause = `(${subFilter})`;
       } else if (raw) {
         // Plain, case-sensitive exact match -- no tolower(). Tests whether
