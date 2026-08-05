@@ -125,7 +125,7 @@
   <div class="bg-sand rounded-sm p-8 max-w-md w-full relative">
     <button onclick="closeLeadForm()" class="absolute top-4 right-4 text-navy/50 hover:text-navy" aria-label="Close">✕</button>
     <div id="lead-form-view">
-      <h3 class="font-serif text-2xl mb-2">Talk to a specialist</h3>
+      <h3 class="font-serif text-2xl mb-2" id="lead-title">Talk to a specialist</h3>
       <p class="text-sm text-navy/60 mb-5">Tell us a bit about you and a Florida luxury specialist will follow up.</p>
       <div class="space-y-3">
         <input id="lead-name" type="text" placeholder="Full name" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
@@ -172,6 +172,7 @@
    ===================================================================== */
 const PAGE_SIZE = 12;
 
+window.idxListingsCache = window.idxListingsCache || {};
 function renderIdxCard(raw) {
   const addr = raw.UnparsedAddress || [raw.City, raw.StateOrProvince].filter(Boolean).join(', ') || 'Address available on request';
   const price = raw.ListPrice ? `$${Number(raw.ListPrice).toLocaleString('en-US')}` : 'Price on request';
@@ -181,6 +182,8 @@ function renderIdxCard(raw) {
   const photo = raw.Media && raw.Media.length ? raw.Media[0].MediaURL : null;
   const officeName = raw.ListOfficeName || 'Listing office not provided';
   const officeContact = raw.ListAgentEmail || raw.ListAgentDirectPhone || raw.ListOfficePhone || '';
+
+  if (raw.ListingKey) window.idxListingsCache[raw.ListingKey] = raw;
 
   const media = photo
     ? `<div class="photo-block h-52"><img src="${photo}" alt="${addr}" class="w-full h-full object-cover" loading="lazy"></div>`
@@ -193,7 +196,8 @@ function renderIdxCard(raw) {
         <p class="font-serif text-xl text-gold-dim">${price}</p>
         <p class="text-sm mt-1">${addr}</p>
         <p class="text-xs text-navy/50 mt-1">${beds} Beds &nbsp;|&nbsp; ${baths} Baths &nbsp;|&nbsp; ${sqft} Sq Ft</p>
-        <p class="text-xs text-navy/70 mt-2 pt-2 border-t border-navy/10">Listing courtesy of: ${officeName}${officeContact ? ' &middot; ' + officeContact : ''}</p>
+        <button onclick="contactAboutListing('${raw.ListingKey}')" class="w-full mt-3 bg-navy text-sand text-xs font-medium py-2 rounded-sm hover:bg-navy-card transition">Contact us about this home</button>
+        <p class="text-[11px] text-navy/50 mt-2 pt-2 border-t border-navy/10">Listing courtesy of: ${officeName}${officeContact ? ' &middot; ' + officeContact : ''}</p>
       </div>
     </div>`;
 }
@@ -272,7 +276,10 @@ async function runSearch(page) {
 /* =====================================================================
    LEAD FORM
    ===================================================================== */
-function openLeadForm() {
+let leadContextMessage = '';
+function openLeadForm(contextMessage) {
+  leadContextMessage = contextMessage || '';
+  document.getElementById('lead-title').textContent = contextMessage ? 'Contact us about this home' : 'Talk to a specialist';
   document.getElementById('lead-form-view').classList.remove('hidden');
   document.getElementById('lead-confirm-view').classList.add('hidden');
   document.getElementById('lead-status').textContent = '';
@@ -284,11 +291,23 @@ function closeLeadForm() {
   document.getElementById('lead-email').value = '';
   document.getElementById('lead-phone').value = '';
 }
+
+// Looks up a rendered listing by ListingKey and opens the lead form with the
+// property's address/price pre-filled -- the "contact us" path a client
+// should reasonably expect, rather than emailing the listing agent shown
+// per BeachesMLS's required attribution directly.
+function contactAboutListing(listingKey) {
+  const raw = window.idxListingsCache[listingKey];
+  const addr = raw ? (raw.UnparsedAddress || [raw.City, raw.StateOrProvince].filter(Boolean).join(', ')) : 'a property on the site';
+  const price = raw && raw.ListPrice ? ` ($${Number(raw.ListPrice).toLocaleString('en-US')})` : '';
+  openLeadForm(`Interested in: ${addr}${price}`);
+}
+
 async function submitLead() {
   const name = document.getElementById('lead-name').value;
   const email = document.getElementById('lead-email').value;
   const phone = document.getElementById('lead-phone').value;
-  const lead = { name, email, phone, source: 'listings-page', site: 'luxuryredefined.homes' };
+  const lead = { name, email, phone, source: 'listings-page', site: 'luxuryredefined.homes', message: leadContextMessage };
   const status = document.getElementById('lead-status');
   if (!lead.name || !lead.email) { status.textContent = 'Please enter your name and email.'; return; }
   status.textContent = 'Submitting...';

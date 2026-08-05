@@ -436,7 +436,8 @@ function renderIdxListingCard(raw) {
         <p class="font-serif text-xl text-gold-dim">${price}</p>
         <p class="text-sm mt-1">${addr}</p>
         <p class="text-xs text-navy/50 mt-1">${beds} Beds &nbsp;|&nbsp; ${baths} Baths &nbsp;|&nbsp; ${sqft} Sq Ft</p>
-        <p class="text-xs text-navy/70 mt-2 pt-2 border-t border-navy/10">Listing courtesy of: ${officeName}${officeContact ? ' &middot; ' + officeContact : ''}</p>
+        <button onclick="contactAboutListing('${raw.ListingKey}')" class="w-full mt-3 bg-navy text-sand text-xs font-medium py-2 rounded-sm hover:bg-navy-card transition">Contact us about this home</button>
+        <p class="text-[11px] text-navy/50 mt-2 pt-2 border-t border-navy/10">Listing courtesy of: ${officeName}${officeContact ? ' &middot; ' + officeContact : ''}</p>
       </div>
     </div>`;
 }
@@ -1209,10 +1210,17 @@ export default {
 
         const cardsHtml = featured.map(renderIdxListingCard).join('');
         const disclaimerHtml = renderIdxDisclaimerBlock();
+        // HTMLRewriter rewrites the actual HTML stream before it reaches the
+        // browser -- this is a real <script> tag in the parsed document, not
+        // a DOM innerHTML assignment, so it executes normally. Seeds the
+        // client-side cache so each SSR'd card's "Contact us" button has the
+        // address/price to work with immediately, before any client-side
+        // search has run.
+        const cacheSeedScript = `<script>window.idxListingsCache = window.idxListingsCache || {}; ${featured.map(l => `window.idxListingsCache[${JSON.stringify(l.ListingKey)}] = ${JSON.stringify(l)};`).join(' ')}</script>`;
 
         class ListingGridHandler {
           element(el) {
-            el.setInnerContent(cardsHtml + disclaimerHtml, { html: true });
+            el.setInnerContent(cardsHtml + disclaimerHtml + cacheSeedScript, { html: true });
           }
         }
 
