@@ -418,7 +418,30 @@ async function submitLead() {
   }
 }
 
+// Reads ?city=, ?propertyType=, ?minPrice= from the URL (used by the
+// "Homes for Sale" category links on community pages) and pre-sets the
+// matching dropdown before the initial search runs.
+function applyUrlParams() {
+  const params = new URLSearchParams(window.location.search);
+  const city = params.get('city');
+  const propertyType = params.get('propertyType');
+  const minPrice = params.get('minPrice');
+
+  if (city) {
+    const regionSelect = document.getElementById('f-region');
+    if ([...regionSelect.options].some(o => o.value === city)) regionSelect.value = city;
+  }
+  if (propertyType) {
+    const typeSelect = document.getElementById('f-type');
+    if ([...typeSelect.options].some(o => o.value === propertyType)) typeSelect.value = propertyType;
+  }
+  if (minPrice === '10000000') {
+    document.getElementById('f-price').value = '$10M+';
+  }
+}
+
 // Initial load
+applyUrlParams();
 runSearch(1);
 </script>
 </body>

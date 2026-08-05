@@ -74,13 +74,9 @@
 </header>
 
 <section class="max-w-5xl mx-auto px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-6 text-center border-b border-navy/10 pb-10">
-  <div><p class="font-serif text-2xl">$18.5M</p><p class="text-xs text-navy/50 uppercase tracking-wide mt-1">Median price*</p></div>
-  <div><p class="font-serif text-2xl">6</p><p class="text-xs text-navy/50 uppercase tracking-wide mt-1">Active listings*</p></div>
   <div><p class="font-serif text-2xl">Ocean-to-Intracoastal estate</p><p class="text-xs text-navy/50 uppercase tracking-wide mt-1">Signature property type</p></div>
   <div><p class="font-serif text-2xl">25 min</p><p class="text-xs text-navy/50 uppercase tracking-wide mt-1">To Palm Beach Intl. Airport</p></div>
 </section>
-<p class="max-w-5xl mx-auto px-6 text-xs text-navy/40 -mt-6 mb-10">*Sample figures — replace with live MLS/IDX data once connected.</p>
-
 <section class="max-w-5xl mx-auto px-6 py-4">
   <div class="rounded-sm h-96 mb-8 overflow-hidden">
     <img src="../images/manalapan-hero.jpg" alt="Extraordinary luxury estate on Ocean Drive, Manalapan, Florida" class="w-full h-full object-cover">
@@ -101,10 +97,21 @@
     </div>
   </div>
 
+  <h2 class="font-serif text-2xl mb-3">Homes for Sale in Manalapan</h2>
+  <div id="community-listing-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+    <p class="col-span-full text-center text-navy/50 py-8">Loading current listings...</p>
+  </div>
+  <div class="flex flex-wrap gap-2 mb-16 text-sm">
+    <a href="../listings.html?city=Manalapan&propertyType=Waterfront" class="border border-navy/20 rounded-full px-4 py-1.5 hover:border-gold-dim hover:text-gold-dim transition">Waterfront Homes</a>
+    <a href="../new-developments.html" class="border border-navy/20 rounded-full px-4 py-1.5 hover:border-gold-dim hover:text-gold-dim transition">New Construction</a>
+    <a href="../listings.html?city=Manalapan&propertyType=Condo" class="border border-navy/20 rounded-full px-4 py-1.5 hover:border-gold-dim hover:text-gold-dim transition">Condos</a>
+    <a href="../listings.html?city=Manalapan&minPrice=10000000" class="border border-navy/20 rounded-full px-4 py-1.5 hover:border-gold-dim hover:text-gold-dim transition">$10M+ Estates</a>
+  </div>
+
   <div class="bg-sand rounded-sm p-8 flex flex-col md:flex-row items-center justify-between gap-6 mb-16">
     <div>
       <p class="font-serif text-2xl">Looking in Manalapan?</p>
-      <p class="text-navy/60 text-sm">Our AI concierge can pull current inventory and connect you with a specialist.</p>
+      <p class="text-navy/60 text-sm">Our concierge can pull current inventory and connect you with a specialist.</p>
     </div>
     <div class="flex gap-3">
       <a href="../index.html#concierge" class="bg-navy text-sand px-6 py-3 rounded-sm text-sm font-medium hover:bg-navy-card transition whitespace-nowrap">Ask the concierge</a>
@@ -168,6 +175,54 @@ async function submitLead() {
     status.textContent = "Something went wrong. Please call (813) 400-0620.";
   }
 }
+</script>
+
+<script>
+function renderCommunityCard(raw) {
+  const addr = raw.UnparsedAddress || [raw.City, raw.StateOrProvince].filter(Boolean).join(', ') || 'Address available on request';
+  const price = raw.ListPrice ? `$${Number(raw.ListPrice).toLocaleString('en-US')}` : 'Price on request';
+  const beds = raw.BedroomsTotal ?? '—';
+  const baths = raw.BathroomsTotalInteger ?? '—';
+  const sqft = raw.LivingArea ? Number(raw.LivingArea).toLocaleString('en-US') : '—';
+  const photos = (raw.Media || []).filter(m => m.MediaCategory === 'Photo').sort((a, b) => (a.Order || 0) - (b.Order || 0));
+  const firstPhoto = photos.length ? photos[0].MediaURL : null;
+  const mlsNum = raw.ListingId || raw.ListingKey || '—';
+  const key = raw.ListingKey;
+
+  const media = firstPhoto
+    ? `<div class="h-52 overflow-hidden bg-navy"><img src="${firstPhoto}" alt="${addr}" class="w-full h-full object-cover" loading="lazy"></div>`
+    : `<div class="h-52 bg-navy/5 flex items-center justify-center text-navy/30 text-xs">Photo unavailable</div>`;
+
+  return `
+    <div class="border border-navy/10 rounded-sm overflow-hidden hover:shadow-lg transition bg-white">
+      ${media}
+      <div class="p-4">
+        <p class="font-serif text-xl text-gold-dim">${price}</p>
+        <p class="text-sm mt-1">${addr}</p>
+        <p class="text-xs text-navy/50 mt-1">${beds} Beds &nbsp;|&nbsp; ${baths} Baths &nbsp;|&nbsp; ${sqft} Sq Ft</p>
+        <button onclick="location.href='/property/' + encodeURIComponent('${key}')" class="w-full mt-3 bg-navy text-sand text-xs font-medium py-2 rounded-sm hover:bg-navy-card transition">Contact us about this home</button>
+        <div class="flex items-center justify-between mt-2 pt-2 border-t border-navy/10">
+          <p class="text-[11px] text-navy/40">MLS# ${mlsNum}</p>
+          <a href="/property/${encodeURIComponent(key)}" class="text-[11px] text-navy/50 hover:text-gold-dim transition">View Details →</a>
+        </div>
+      </div>
+    </div>`;
+}
+
+(async function loadCommunityListings() {
+  const grid = document.getElementById('community-listing-grid');
+  try {
+    const res = await fetch('/api/listings?city=' + encodeURIComponent('Manalapan') + '&pageSize=6');
+    const data = await res.json();
+    if (!res.ok || !data.listings || !data.listings.length) {
+      grid.innerHTML = `<p class="col-span-full text-center text-navy/50 py-8">No current listings match right now. <a href="/listings.html" class="underline hover:text-gold-dim">Browse all current listings</a> or <button onclick="openLeadForm(&apos;buyer&apos;)" class="underline hover:text-gold-dim">tell us what you're looking for</button>.</p>`;
+      return;
+    }
+    grid.innerHTML = data.listings.map(renderCommunityCard).join('');
+  } catch (e) {
+    grid.innerHTML = `<p class="col-span-full text-center text-navy/50 py-8"><a href="/listings.html" class="underline hover:text-gold-dim">Browse all current listings</a> or <button onclick="openLeadForm(&apos;buyer&apos;)" class="underline hover:text-gold-dim">tell us what you're looking for</button>.</p>`;
+  }
+})();
 </script>
 </body>
 </html>
