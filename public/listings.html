@@ -457,6 +457,18 @@ function applyUrlParams() {
   if (subdivision) {
     activeSubdivisionFilter = subdivision;
     if (developmentName) activeDevelopmentName = developmentName;
+    // A subdivision link means "show me everything at this development" --
+    // not "show me everything at this development that also happens to
+    // fall inside the page's generic default price bracket." Without this,
+    // the price dropdown's default ($2M-$5M) silently filtered out every
+    // listing priced outside that range, which is exactly what made South
+    // Flagler House, Ritz-Carlton, and Panther National appear to have zero
+    // listings even though real, active inventory existed the whole time.
+    // Only reset it if the URL didn't itself explicitly ask for a price
+    // range alongside the subdivision.
+    if (!minPrice && !params.get('maxPrice')) {
+      document.getElementById('f-price').value = 'Any price';
+    }
   }
 }
 
