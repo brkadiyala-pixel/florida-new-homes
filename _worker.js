@@ -228,34 +228,117 @@ async function pushToKvCore(lead, env) {
 }
 
 /**
- * Queries BeachesMLS listing data via the Spark® Platform API (FBS/Flexmls
- * Datamart), the RESO Web API-compliant feed BeachesMLS actually uses —
- * requested via sparkplatform.com/register/developers, enrolled through
- * the "BeachesMLS Agent/Broker Licensed Feed – IDX" Datamart plan.
+ * Queries BeachesMLS listing data via the Spark® Platform API (FBS/Flexmls),
+ * enrolled under "BeachesMLS Agent/Broker Licensed Feed – IDX." Confirmed
+ * against FBS's own documentation (sparkplatform.com/docs) rather than
+ * guessed: the credential type issued for this kind of feed is a
+ * non-expiring access token used as a plain Bearer token — not the older
+ * signed key/secret session-token exchange some Spark integrations use.
  *
- * IMPORTANT — Spark's auth is NOT a simple bearer token. It uses a signed
- * key/secret exchange that returns a short-lived session token:
- *   1. Sign a request with your developer key + secret (MD5-based signature
- *      per Spark's auth docs) to obtain a session token.
- *   2. Session tokens last up to 24h, with a 1h idle timeout — expired
- *      tokens must be re-authenticated.
- *   3. Every data request must include the current session token.
- * The placeholder below assumes RESO_API_TOKEN is already a valid, current
- * session token for simplicity — swap in the real key+secret→session-token
- * exchange (see sparkplatform.com/docs/authentication/spark_api_authentication)
- * once you're actually enrolled and can see the exact request-signing format
- * Spark expects. This is the one piece that still needs finishing once your
- * BeachesMLS enrollment is approved.
+ * Base endpoint confirmed current as of the Version 3 RESO Web API:
+ *   https://replication.sparkapi.com/Version/3/Reso/OData/Property
  *
- * RESO_API_BASE_URL should be the specific resource endpoint Spark gives
- * you post-approval (typically something under replication.sparkapi.com or
- * similar — confirm the exact URL in your Datamart enrollment details).
+ * IMPORTANT COMPLIANCE NOTE (BeachesMLS IDX Rules and Regulations, Section
+ * 20): this function deliberately does NOT filter on any "internet display
+ * opt-out" field (e.g. InternetEntireListingDisplayYN), because that exact
+ * field name has not been verified against BeachesMLS's actual feed
+ * metadata yet -- filtering on a field name that turns out to be wrong
+ * would make the ENTIRE query fail, not just skip the filter. Many MLSs
+ * already exclude opted-out listings before they ever reach an IDX data
+ * plan, so this may be a non-issue -- but confirm with FBS/BeachesMLS
+ * support (api-support@fbsdata.com) before relying on that assumption at
+ * scale. $500-per-occurrence fines apply per the rules doc for IDX
+ * violations, so this is worth a real answer, not a guess.
  */
+const RESO_BASE_URL = 'https://replication.sparkapi.com/Version/3/Reso/OData/Property';
+
+// Fields required to satisfy BeachesMLS's own display rules (Section 20.3.3:
+// listing firm + contact; 20.3.1: only MLS-designated public fields; never
+// showing instructions, private remarks, or seller/occupant info).
+const RESO_SELECT_FIELDS = [
+  'ListingKey', 'UnparsedAddress', 'City', 'StateOrProvince', 'PostalCode',
+  'ListPrice', 'BedroomsTotal', 'BathroomsTotalInteger', 'LivingArea',
+  'PropertyType', 'PropertySubType', 'WaterfrontYN', 'SubdivisionName',
+  'StandardStatus', 'ListOfficeName', 'ListAgentEmail', 'ListAgentDirectPhone',
+  'ListOfficePhone', 'ModificationTimestamp'
+].join(',');
+
+function buildResoFilter({ city, minPrice, maxPrice, beds, propertyType }) {
+  const filters = [`StandardStatus eq 'Active'`];
+  if (city) filters.push(`City eq '${city.replace(/'/g, "''")}'`);
+  if (minPrice) filters.push(`ListPrice ge ${Number(minPrice)}`);
+  if (maxPrice) filters.push(`ListPrice le ${Number(maxPrice)}`);
+  if (beds) filters.push(`BedroomsTotal ge ${Number(beds)}`);
+  if (propertyType === 'Condominium' || propertyType === 'Condo') filters.push(`PropertyType eq 'Condominium'`);
+  if (propertyType === 'Waterfront') filters.push(`WaterfrontYN eq true`);
+  if (propertyType === 'Golf community') {
+    // No standard MLS field marks "golf community" directly. Best-effort
+    // approximation: match against known golf club subdivision names from
+    // the site's own concierge system prompt. Revisit once real field
+    // names/values come back from Spark -- some MLSs expose a cleaner
+    // community/subdivision list that would make this exact rather than
+    // approximate.
+    const golfCommunities = ['Bears Club', 'Admirals Cove', 'Old Palm', "Frenchman's Creek"];
+    const golfFilter = golfCommunities
+      .map(name => `contains(SubdivisionName,'${name.replace(/'/g, "''")}')`)
+      .join(' or ');
+    filters.push(`(${golfFilter})`);
+  }
+  return filters.join(' and ');
+}
+
+/* Thin wrapper around the actual Spark request, with KV caching.
+   Compliance note: Section 20.2.5 requires refreshing at least every 12
+   hours -- this caches for 30 minutes, comfortably inside that requirement
+   while keeping the site fast and avoiding hammering the MLS feed on every
+   visitor. Cache key is a hash of the query itself, so different searches
+   don't collide. */
+async function queryResoWithCache(env, filterParams, top, skip) {
+  const filterClause = buildResoFilter(filterParams);
+  const cacheKey = `idx-cache:${filterClause}:top${top}:skip${skip}`;
+
+  if (env.REPORTS_KV) {
+    const cached = await env.REPORTS_KV.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+  }
+
+  const query = new URLSearchParams({
+    '$filter': filterClause,
+    '$select': RESO_SELECT_FIELDS,
+    '$expand': 'Media',
+    '$top': String(top),
+    '$skip': String(skip),
+    '$count': 'true'
+  });
+
+  const res = await fetch(`${RESO_BASE_URL}?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${env.SPARK_ACCESS_TOKEN}`,
+      Accept: 'application/json'
+    }
+  });
+
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Spark API rejected the request (${res.status}): ${detail}`);
+  }
+
+  const data = await res.json();
+  const result = { listings: data.value || [], total: data['@odata.count'] ?? null };
+
+  if (env.REPORTS_KV) {
+    // 30 min TTL -- well inside the 12h compliance requirement.
+    await env.REPORTS_KV.put(cacheKey, JSON.stringify(result), { expirationTtl: 1800 });
+  }
+
+  return result;
+}
+
 async function handleListings(request, env) {
-  if (!env.RESO_API_BASE_URL || !env.RESO_API_TOKEN) {
+  if (!env.SPARK_ACCESS_TOKEN) {
     return json({
       error: 'IDX feed is not configured yet.',
-      detail: 'Set RESO_API_BASE_URL and RESO_API_TOKEN once your BeachesMLS/Spark API enrollment is approved.'
+      detail: 'SPARK_ACCESS_TOKEN secret is not set on this Worker.'
     }, 501);
   }
 
@@ -265,50 +348,110 @@ async function handleListings(request, env) {
   const maxPrice = url.searchParams.get('maxPrice');
   const beds = url.searchParams.get('beds');
   const propertyType = url.searchParams.get('propertyType');
-
-  // Build a RESO Data Dictionary-style OData $filter clause.
-  const filters = [`StandardStatus eq 'Active'`];
-  if (city) filters.push(`City eq '${city.replace(/'/g, "''")}'`);
-  if (minPrice) filters.push(`ListPrice ge ${Number(minPrice)}`);
-  if (maxPrice) filters.push(`ListPrice le ${Number(maxPrice)}`);
-  if (beds) filters.push(`BedroomsTotal ge ${Number(beds)}`);
-  if (propertyType === 'Condominium') filters.push(`PropertyType eq 'Condominium'`);
-  if (propertyType === 'Waterfront') filters.push(`WaterfrontYN eq true`);
-  if (propertyType === 'Golf community') {
-    // No standard MLS field marks "golf community" directly. Best-effort
-    // approximation: match against known golf club subdivision names from
-    // the site's own concierge system prompt. Revisit once real field
-    // names/values come back from Spark — some MLSs expose a cleaner
-    // community/subdivision list that would make this exact rather than
-    // approximate.
-    const golfCommunities = ['Bears Club', 'Admirals Cove', 'Old Palm', "Frenchman's Creek"];
-    const golfFilter = golfCommunities
-      .map(name => `contains(SubdivisionName,'${name.replace(/'/g, "''")}')`)
-      .join(' or ');
-    filters.push(`(${golfFilter})`);
-  }
-
-  const query = new URLSearchParams({
-    '$filter': filters.join(' and '),
-    '$top': '12',
-    '$select': 'ListingKey,UnparsedAddress,City,ListPrice,BedroomsTotal,BathroomsTotalInteger,LivingArea,PropertyType,WaterfrontYN,SubdivisionName,Media'
-  });
+  const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+  const pageSize = Math.min(50, Number(url.searchParams.get('pageSize')) || 12);
 
   try {
-    const res = await fetch(`${env.RESO_API_BASE_URL}?${query.toString()}`, {
-      headers: { Authorization: `Bearer ${env.RESO_API_TOKEN}` }
-    });
-
-    if (!res.ok) {
-      const detail = await res.text();
-      return json({ error: 'IDX provider rejected the request', detail }, 502);
-    }
-
-    const data = await res.json();
-    return json({ listings: data.value || [] });
+    const result = await queryResoWithCache(
+      env,
+      { city, minPrice, maxPrice, beds, propertyType },
+      pageSize,
+      (page - 1) * pageSize
+    );
+    return json({ listings: result.listings, total: result.total, page, pageSize });
   } catch (err) {
     return json({ error: 'Unexpected error contacting IDX feed', detail: String(err) }, 500);
   }
+}
+
+/* Featured listings for the homepage -- 3 highest-priced active listings
+   across the brokerage's core service area, refreshed via the same cache. */
+async function getFeaturedListings(env) {
+  if (!env.SPARK_ACCESS_TOKEN) return [];
+  try {
+    const cities = ['Palm Beach', 'Jupiter', 'Boca Raton', 'Manalapan', 'Delray Beach'];
+    const cacheKey = `idx-cache:featured`;
+    if (env.REPORTS_KV) {
+      const cached = await env.REPORTS_KV.get(cacheKey);
+      if (cached) return JSON.parse(cached);
+    }
+
+    const cityFilter = cities.map(c => `City eq '${c}'`).join(' or ');
+    const query = new URLSearchParams({
+      '$filter': `StandardStatus eq 'Active' and (${cityFilter})`,
+      '$select': RESO_SELECT_FIELDS,
+      '$expand': 'Media',
+      '$orderby': 'ListPrice desc',
+      '$top': '3'
+    });
+
+    const res = await fetch(`${RESO_BASE_URL}?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${env.SPARK_ACCESS_TOKEN}`, Accept: 'application/json' }
+    });
+
+    if (!res.ok) {
+      console.log('getFeaturedListings failed:', await res.text());
+      return [];
+    }
+
+    const data = await res.json();
+    const listings = data.value || [];
+    if (env.REPORTS_KV) {
+      await env.REPORTS_KV.put(cacheKey, JSON.stringify(listings), { expirationTtl: 1800 });
+    }
+    return listings;
+  } catch (err) {
+    console.log('getFeaturedListings error:', String(err));
+    return [];
+  }
+}
+
+/* Shared HTML card renderer -- used both for server-side rendering the
+   homepage (via HTMLRewriter, see below) and could be reused for any other
+   listing display. Bakes in the BeachesMLS-required compliance elements
+   directly into the markup rather than as an afterthought:
+     - Section 20.2.7: brokerage name in a visible color/typeface
+     - Section 20.3.3: listing firm + contact, same size as other listing text
+     - Section 20.3.6: BeachesMLS logo as source attribution
+   Section 20.3.7's sitewide disclaimer text lives once near the listings
+   section (see renderIdxDisclaimer), not repeated per-card. */
+function renderIdxListingCard(raw) {
+  const addr = raw.UnparsedAddress || [raw.City, raw.StateOrProvince].filter(Boolean).join(', ') || 'Address available on request';
+  const price = raw.ListPrice ? `$${Number(raw.ListPrice).toLocaleString('en-US')}` : 'Price on request';
+  const beds = raw.BedroomsTotal ?? '—';
+  const baths = raw.BathroomsTotalInteger ?? '—';
+  const sqft = raw.LivingArea ? Number(raw.LivingArea).toLocaleString('en-US') : '—';
+  const photo = raw.Media && raw.Media.length ? raw.Media[0].MediaURL : null;
+  const officeName = raw.ListOfficeName || 'Listing office not provided';
+  const officeContact = raw.ListAgentEmail || raw.ListAgentDirectPhone || raw.ListOfficePhone || '';
+
+  const media = photo
+    ? `<div class="photo-block tagged h-52"><img src="${photo}" alt="${addr}" class="w-full h-full object-cover" loading="lazy"></div>`
+    : `<div class="photo-block h-52 flex items-center justify-center text-sand/30 text-xs">Photo unavailable</div>`;
+
+  return `
+    <div class="border border-navy/10 rounded-sm overflow-hidden hover:shadow-lg transition">
+      ${media}
+      <div class="p-4">
+        <p class="font-serif text-xl text-gold-dim">${price}</p>
+        <p class="text-sm mt-1">${addr}</p>
+        <p class="text-xs text-navy/50 mt-1">${beds} Beds &nbsp;|&nbsp; ${baths} Baths &nbsp;|&nbsp; ${sqft} Sq Ft</p>
+        <p class="text-xs text-navy/70 mt-2 pt-2 border-t border-navy/10">Listing courtesy of: ${officeName}${officeContact ? ' &middot; ' + officeContact : ''}</p>
+      </div>
+    </div>`;
+}
+
+// Required verbatim per BeachesMLS IDX Rules Section 20.3.7.
+const IDX_DISCLAIMER_TEXT = 'IDX information is provided exclusively for consumers\' personal, non-commercial use. It may not be used for any purpose other than to identify prospective properties consumers may be interested in purchasing. Data is deemed reliable but is not guaranteed accurate by BeachesMLS.';
+// Required substantially per Section 20.3.7 / 21.17 (copyright + logo notice).
+const IDX_COPYRIGHT_TEXT = `All listings featuring the BMLS logo are provided by BeachesMLS, Inc. This information is not verified for authenticity or accuracy and is not guaranteed. Copyright © ${new Date().getFullYear()} BeachesMLS, Inc.`;
+
+function renderIdxDisclaimerBlock() {
+  return `
+    <div class="mt-6 pt-6 border-t border-navy/10 flex flex-col md:flex-row items-start md:items-center gap-4">
+      <img src="/images/beachesmls-logo.png" alt="BeachesMLS" class="h-6 w-auto">
+      <p class="text-[11px] text-navy/50 leading-snug max-w-2xl">${IDX_COPYRIGHT_TEXT} ${IDX_DISCLAIMER_TEXT}</p>
+    </div>`;
 }
 
 /* =====================================================================
@@ -1048,6 +1191,38 @@ export default {
       if (!raw) return new Response('No citation check has run yet — visit /admin/run/citation-monitor first.', { status: 404 });
       const data = JSON.parse(raw);
       return json(data);
+    }
+
+    // Server-render real IDX listings into the homepage at request time --
+    // both AI crawlers (no JS execution) and real visitors see live data
+    // in the raw HTML, not just after client-side JS runs. Falls back to
+    // whatever's already in the static HTML (the SEO-phase sample listings)
+    // if the feed isn't configured yet or errors, so this never breaks
+    // the page -- it only upgrades it when real data is available.
+    if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+      const assetResponse = await env.ASSETS.fetch(request);
+      if (!env.SPARK_ACCESS_TOKEN) return assetResponse;
+
+      try {
+        const featured = await getFeaturedListings(env);
+        if (!featured.length) return assetResponse;
+
+        const cardsHtml = featured.map(renderIdxListingCard).join('');
+        const disclaimerHtml = renderIdxDisclaimerBlock();
+
+        class ListingGridHandler {
+          element(el) {
+            el.setInnerContent(cardsHtml + disclaimerHtml, { html: true });
+          }
+        }
+
+        return new HTMLRewriter()
+          .on('#listing-grid', new ListingGridHandler())
+          .transform(assetResponse);
+      } catch (err) {
+        console.log('Homepage SSR listing injection failed (non-fatal):', String(err));
+        return assetResponse;
+      }
     }
 
     // Everything else: serve the static site files as before.
