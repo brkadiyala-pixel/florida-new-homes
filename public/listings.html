@@ -250,7 +250,7 @@ function renderIdxCard(raw) {
         <button onclick="contactAboutListing('${key}')" class="w-full mt-3 bg-navy text-sand text-xs font-medium py-2 rounded-sm hover:bg-navy-card transition">Contact us about this home</button>
         <div class="flex items-center justify-between mt-2 pt-2 border-t border-navy/10">
           <p class="text-[11px] text-navy/40">MLS# ${mlsNum}</p>
-          <p class="text-[11px] text-navy/50 text-right">Courtesy: ${officeName}${officeContact ? ' &middot; ' + officeContact : ''}</p>
+          <a href="/property/${encodeURIComponent(key)}" class="text-[11px] text-navy/50 hover:text-gold-dim transition">View Details →</a>
         </div>
       </div>
     </div>`;

@@ -36,7 +36,7 @@ How to behave:
 - Everything else (bedrooms, boat dock, gated community, timeline, and similar) is optional color. Invite it conversationally once rather than demanding it — e.g. "anything else that's a must-have, or should I pull a few options together now?" — and proceed either way.
 - If the person already volunteers both their priority and their budget in one message, skip straight to reflecting and offering to pull options or connect them with a specialist — do not ask anything further just to be thorough.
 - Never stack more than one question in a single reply, even if it's phrased as one sentence with "and."
-- IDX/live listings: when the person describes what they're looking for (city, price range, beds, property type), the website will query the real MLS feed via /api/listings and may pass you matching results as JSON. If you receive real listing data, you may reference those specific addresses, prices, and details. If no listing data is provided to you, or the feed is empty for that search, continue to speak in ranges and generalities and offer to connect them with a specialist for exact inventory — never invent a specific address, price, or listing that wasn't given to you.
+- IDX/live listings: you have a search_listings tool connected to the real BeachesMLS feed. Once you have at least one concrete, specific filter (a city, a price range, a bed count, or a property type), call it — don't wait to gather everything first. If it returns real results, reference those specific addresses, prices, and details in your reply. If it returns nothing, say so plainly and offer to connect them with a specialist for off-market options rather than inventing a listing.
 - If someone wants to book a consultation, get a valuation, request off-market access, or asks something you can't fully answer, ask for their name and best phone number so a specialist can follow up — do not just say goodbye.
 - Keep replies to 2-4 sentences unless the person asks for more detail.
 - Once the conversation has established genuine buying or selling intent with at least one specific detail (a location, a budget, a property type, or a timeline), end that reply with the exact marker "[CAPTURE_LEAD]" on its own line, after your normal message. Use this at most once per conversation. Never mention this marker to the person or explain what it does — it is a signal for the website, not part of your visible reply.`;
@@ -435,6 +435,154 @@ function formatHoaFee(raw) {
   return `$${Number(raw.AssociationFee).toLocaleString('en-US')}${freq}`;
 }
 
+/* Fetches one listing's full detail (including PublicRemarks -- the public,
+   MLS-sanctioned description field, distinct from PrivateRemarks which is
+   agent-only and must never be displayed) for the per-listing detail page. */
+async function getListingByKey(env, listingKey) {
+  const cacheKey = `idx-cache:detail:${listingKey}`;
+  if (env.REPORTS_KV) {
+    const cached = await env.REPORTS_KV.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+  }
+
+  const safeKey = listingKey.replace(/'/g, "''");
+  const query = new URLSearchParams({
+    '$filter': `ListingKey eq '${safeKey}'`,
+    '$select': RESO_SELECT_FIELDS + ',PublicRemarks',
+    '$expand': 'Media',
+    '$top': '1'
+  });
+
+  const res = await fetch(`${RESO_BASE_URL}?${query.toString()}`, {
+    headers: { Authorization: `Bearer ${env.SPARK_ACCESS_TOKEN}`, Accept: 'application/json' }
+  });
+
+  if (!res.ok) throw new Error(`Spark API rejected the detail request (${res.status}): ${await res.text()}`);
+
+  const data = await res.json();
+  const listing = (data.value && data.value[0]) || null;
+
+  if (listing && env.REPORTS_KV) {
+    await env.REPORTS_KV.put(cacheKey, JSON.stringify(listing), { expirationTtl: 1800 });
+  }
+  return listing;
+}
+
+function renderPropertyDetailPage(raw) {
+  const addr = raw.UnparsedAddress || [raw.City, raw.StateOrProvince].filter(Boolean).join(', ') || 'Address available on request';
+  const price = raw.ListPrice ? `$${Number(raw.ListPrice).toLocaleString('en-US')}` : 'Price on request';
+  const beds = raw.BedroomsTotal ?? '—';
+  const baths = raw.BathroomsTotalInteger ?? '—';
+  const sqft = raw.LivingArea ? Number(raw.LivingArea).toLocaleString('en-US') : '—';
+  const officeName = raw.ListOfficeName || 'Listing office not provided';
+  const officeContact = raw.ListAgentEmail || raw.ListAgentDirectPhone || raw.ListOfficePhone || '';
+  const mlsNum = raw.ListingId || raw.ListingKey || '—';
+  const hoaFee = formatHoaFee(raw);
+  const photos = getListingPhotos(raw);
+  const remarks = raw.PublicRemarks ? raw.PublicRemarks.replace(/[<>]/g, '') : '';
+
+  const photoHtml = photos.length
+    ? photos.map((p, i) => `<img src="${p.MediaURL}" alt="${addr} photo ${i + 1}" class="w-full h-auto rounded-sm mb-3" loading="${i === 0 ? 'eager' : 'lazy'}">`).join('')
+    : `<div class="h-64 bg-navy/5 rounded-sm flex items-center justify-center text-navy/30 text-sm">No photos available</div>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${addr} | Luxury Redefined Palm Beach</title>
+<meta name="description" content="${price} -- ${beds} beds, ${baths} baths, ${sqft} sq ft at ${addr}.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    colors: { navy: { DEFAULT: '#0f1720', deep: '#0a0f16', card: '#1a2532', line: '#2a3644' }, gold: { DEFAULT: '#c9a86a', light: '#e8d9b8', dim: '#8b7847' }, sand: '#f4ede1' },
+    fontFamily: { serif: ['Playfair Display', 'serif'], sans: ['Inter', 'sans-serif'] }
+  } } }
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; }
+  h1, h2, h3, .font-serif { font-family: 'Playfair Display', serif; }
+</style>
+</head>
+<body class="bg-[#f8f6f1] text-navy">
+<nav class="bg-navy-deep px-6 py-4">
+  <div class="max-w-5xl mx-auto flex items-center justify-between">
+    <a href="/" class="font-serif text-gold text-lg">Luxury Redefined</a>
+    <a href="/listings.html" class="text-sand/70 text-sm hover:text-gold transition">← Back to search</a>
+  </div>
+</nav>
+
+<div class="max-w-5xl mx-auto px-6 py-10">
+  <div class="grid md:grid-cols-3 gap-10">
+    <div class="md:col-span-2">
+      ${photoHtml}
+    </div>
+    <div>
+      <p class="font-serif text-3xl text-gold-dim">${price}</p>
+      <p class="text-lg mt-1">${addr}</p>
+      <p class="text-sm font-medium text-navy mt-3">${beds} bd &nbsp;|&nbsp; ${baths} ba &nbsp;|&nbsp; ${sqft} sqft</p>
+      ${hoaFee ? `<p class="text-sm text-navy/60 mt-1">HOA: ${hoaFee}</p>` : ''}
+      ${raw.DaysOnMarket != null ? `<p class="text-sm text-navy/60">${raw.DaysOnMarket} days on market</p>` : ''}
+
+      <button onclick="window.parent.postMessage||null; document.getElementById('contact-modal').classList.remove('hidden')" class="w-full mt-5 bg-navy text-sand font-medium py-3 rounded-sm hover:bg-navy-card transition">Contact us about this home</button>
+
+      ${remarks ? `<div class="mt-6 pt-6 border-t border-navy/10"><h2 class="font-serif text-lg mb-2">About this home</h2><p class="text-sm text-navy/70 leading-relaxed">${remarks}</p></div>` : ''}
+
+      <div class="mt-6 pt-6 border-t border-navy/10">
+        <img src="/images/beachesmls-logo.png" alt="BeachesMLS" class="h-6 w-auto mb-3">
+        <p class="text-xs text-navy/70">Listing courtesy of: ${officeName}${officeContact ? ' &middot; ' + officeContact : ''}</p>
+        <p class="text-[11px] text-navy/40 mt-2">MLS# ${mlsNum}</p>
+        <p class="text-[11px] text-navy/40 mt-2 leading-snug">All listings featuring the BMLS logo are provided by BeachesMLS, Inc. This information is not verified for authenticity or accuracy and is not guaranteed. Copyright &copy; ${new Date().getFullYear()} BeachesMLS, Inc. IDX information is provided exclusively for consumers' personal, non-commercial use and may not be used for any purpose other than to identify prospective properties consumers may be interested in purchasing. Data is deemed reliable but is not guaranteed accurate by BeachesMLS.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="contact-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6">
+  <div class="bg-sand rounded-sm p-8 max-w-md w-full relative">
+    <button onclick="document.getElementById('contact-modal').classList.add('hidden')" class="absolute top-4 right-4 text-navy/50 hover:text-navy" aria-label="Close">✕</button>
+    <h3 class="font-serif text-2xl mb-2">Contact us about this home</h3>
+    <p class="text-sm text-navy/60 mb-5">${addr} -- ${price}. Tell us how to reach you and a specialist will follow up.</p>
+    <div class="space-y-3">
+      <input id="lead-name" type="text" placeholder="Full name" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
+      <input id="lead-email" type="email" placeholder="Email address" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
+      <input id="lead-phone" type="tel" placeholder="Phone number" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
+      <button onclick="submitDetailLead()" class="w-full bg-navy text-sand py-3 rounded-sm text-sm font-medium hover:bg-navy-card transition">Submit</button>
+      <p id="lead-status" class="text-xs text-navy/50 text-center"></p>
+    </div>
+  </div>
+</div>
+
+<footer class="bg-navy-deep text-sand/60 px-6 py-8 mt-10 text-center text-xs">
+  <p>Bharath Kadiyala, Broker &nbsp;·&nbsp; License #BK3462426 &nbsp;·&nbsp; Dalton Wade Real Estate Group</p>
+</footer>
+
+<script>
+async function submitDetailLead() {
+  const name = document.getElementById('lead-name').value;
+  const email = document.getElementById('lead-email').value;
+  const phone = document.getElementById('lead-phone').value;
+  const status = document.getElementById('lead-status');
+  if (!name || !email) { status.textContent = 'Please enter your name and email.'; return; }
+  status.textContent = 'Submitting...';
+  try {
+    const res = await fetch('/api/lead', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, phone, source: 'property-detail', site: 'luxuryredefined.homes', message: 'Interested in: ${addr.replace(/'/g, "\\'")} (${price})' })
+    });
+    if (!res.ok) throw new Error();
+    status.textContent = "Thank you -- a specialist will reach out shortly.";
+  } catch (e) {
+    status.textContent = 'Something went wrong. Please call (813) 550-6772.';
+  }
+}
+</script>
+</body>
+</html>`;
+}
+
 function renderIdxListingCard(raw) {
   const addr = raw.UnparsedAddress || [raw.City, raw.StateOrProvince].filter(Boolean).join(', ') || 'Address available on request';
   const price = raw.ListPrice ? `$${Number(raw.ListPrice).toLocaleString('en-US')}` : 'Price on request';
@@ -481,7 +629,7 @@ function renderIdxListingCard(raw) {
         <button onclick="contactAboutListing('${key}')" class="w-full mt-3 bg-navy text-sand text-xs font-medium py-2 rounded-sm hover:bg-navy-card transition">Contact us about this home</button>
         <div class="flex items-center justify-between mt-2 pt-2 border-t border-navy/10">
           <p class="text-[11px] text-navy/40">MLS# ${mlsNum}</p>
-          <p class="text-[11px] text-navy/50 text-right">Courtesy: ${officeName}${officeContact ? ' &middot; ' + officeContact : ''}</p>
+          <a href="/property/${encodeURIComponent(key)}" class="text-[11px] text-navy/50 hover:text-gold-dim transition">View Details →</a>
         </div>
       </div>
     </div>`;
@@ -1122,6 +1270,26 @@ async function runCitationMonitorJob(env) {
   return { ok: true, monthLabel, citedCount, total: results.length };
 }
 
+// Lets Claude itself decide when enough concrete criteria exist to search
+// real inventory, rather than the frontend trying to guess from free text
+// via regex. Anthropic's standard tool-use pattern: Claude may respond with
+// a tool_use block instead of (or alongside) text; we execute the real
+// search and send the result back for a final, grounded reply.
+const SEARCH_LISTINGS_TOOL = {
+  name: 'search_listings',
+  description: 'Search current active BeachesMLS listings matching what the person has described. Call this as soon as at least one concrete filter is known (city, price range, bed count, or property type) -- do not wait to gather every possible detail first.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      city: { type: 'string', description: 'One of: Palm Beach, Jupiter, Boca Raton, Manalapan, Delray Beach' },
+      minPrice: { type: 'number', description: 'Minimum price in dollars' },
+      maxPrice: { type: 'number', description: 'Maximum price in dollars' },
+      beds: { type: 'number', description: 'Minimum bedroom count' },
+      propertyType: { type: 'string', enum: ['Waterfront', 'Golf community', 'Condominium'] }
+    }
+  }
+};
+
 async function handleConcierge(request, env) {
   if (!env.ANTHROPIC_API_KEY) {
     return json({ error: 'Concierge is not configured yet (missing ANTHROPIC_API_KEY).' }, 500);
@@ -1147,29 +1315,95 @@ async function handleConcierge(request, env) {
   const messages = [...history, { role: 'user', content: message }];
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const firstRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'x-api-key': env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 400, system: SYSTEM_PROMPT, messages })
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        system: SYSTEM_PROMPT,
+        messages,
+        tools: env.SPARK_ACCESS_TOKEN ? [SEARCH_LISTINGS_TOOL] : undefined
+      })
     });
 
-    if (!res.ok) {
-      const detail = await res.text();
+    if (!firstRes.ok) {
+      const detail = await firstRes.text();
       return json({ error: 'AI request failed', detail }, 502);
     }
 
-    const data = await res.json();
-    const reply = (data.content || [])
+    const firstData = await firstRes.json();
+    const toolUseBlock = (firstData.content || []).find(b => b.type === 'tool_use' && b.name === 'search_listings');
+
+    // No tool call -- plain conversational reply, same as before.
+    if (!toolUseBlock) {
+      const reply = (firstData.content || [])
+        .map(block => (block.type === 'text' ? block.text : ''))
+        .filter(Boolean)
+        .join('\n')
+        .trim() || "I'll connect you with a specialist who can help with that.";
+      return json({ reply, listings: [] });
+    }
+
+    // Execute the real search Claude asked for.
+    let searchResult;
+    try {
+      searchResult = await queryResoWithCache(env, toolUseBlock.input || {}, 6, 0);
+    } catch (err) {
+      searchResult = { listings: [], total: 0, error: String(err) };
+    }
+
+    // Send Claude a compact summary (not full Media arrays / raw payloads)
+    // so it can reference real specifics without bloating token usage --
+    // the full raw listings go back to the frontend separately, for
+    // rendering actual photo cards via the existing renderIdxCard().
+    const summaryForClaude = searchResult.listings.slice(0, 6).map(l => ({
+      address: l.UnparsedAddress || [l.City, l.StateOrProvince].filter(Boolean).join(', '),
+      price: l.ListPrice,
+      beds: l.BedroomsTotal,
+      baths: l.BathroomsTotalInteger,
+      sqft: l.LivingArea
+    }));
+
+    const secondRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        system: SYSTEM_PROMPT,
+        tools: [SEARCH_LISTINGS_TOOL],
+        messages: [
+          ...messages,
+          { role: 'assistant', content: firstData.content },
+          { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUseBlock.id, content: JSON.stringify({ count: summaryForClaude.length, listings: summaryForClaude }) }] }
+        ]
+      })
+    });
+
+    if (!secondRes.ok) {
+      const detail = await secondRes.text();
+      return json({ error: 'AI request failed', detail }, 502);
+    }
+
+    const secondData = await secondRes.json();
+    const reply = (secondData.content || [])
       .map(block => (block.type === 'text' ? block.text : ''))
       .filter(Boolean)
       .join('\n')
-      .trim() || "I'll connect you with a specialist who can help with that.";
+      .trim() || (summaryForClaude.length
+        ? `I found ${summaryForClaude.length} current listing${summaryForClaude.length === 1 ? '' : 's'} that match.`
+        : "I don't see an exact match in current inventory, but a specialist can help with off-market options.");
 
-    return json({ reply });
+    return json({ reply, listings: searchResult.listings || [] });
   } catch (err) {
     return json({ error: 'Unexpected error contacting the AI service', detail: String(err) }, 500);
   }
@@ -1275,6 +1509,29 @@ export default {
       } catch (err) {
         console.log('Homepage SSR listing injection failed (non-fatal):', String(err));
         return assetResponse;
+      }
+    }
+
+    if (request.method === 'GET' && url.pathname.startsWith('/property/')) {
+      const listingKey = decodeURIComponent(url.pathname.replace('/property/', '').replace(/\/$/, ''));
+      if (!listingKey || !env.SPARK_ACCESS_TOKEN) {
+        return new Response('Listing not found.', { status: 404 });
+      }
+      try {
+        const listing = await getListingByKey(env, listingKey);
+        if (!listing) {
+          return new Response('This listing may no longer be available. <a href="/listings.html">Back to search</a>', {
+            status: 404,
+            headers: { 'Content-Type': 'text/html' }
+          });
+        }
+        return new Response(renderPropertyDetailPage(listing), { headers: { 'Content-Type': 'text/html' } });
+      } catch (err) {
+        console.log('Property detail page failed:', String(err));
+        return new Response('Something went wrong loading this listing. <a href="/listings.html">Back to search</a>', {
+          status: 500,
+          headers: { 'Content-Type': 'text/html' }
+        });
       }
     }
 

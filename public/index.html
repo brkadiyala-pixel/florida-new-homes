@@ -843,7 +843,7 @@ function renderIdxCard(raw) {
         <button onclick="contactAboutListing('${key}')" class="w-full mt-3 bg-navy text-sand text-xs font-medium py-2 rounded-sm hover:bg-navy-card transition">Contact us about this home</button>
         <div class="flex items-center justify-between mt-2 pt-2 border-t border-navy/10">
           <p class="text-[11px] text-navy/40">MLS# ${mlsNum}</p>
-          <p class="text-[11px] text-navy/50 text-right">Courtesy: ${officeName}${officeContact ? ' &middot; ' + officeContact : ''}</p>
+          <a href="/property/${encodeURIComponent(key)}" class="text-[11px] text-navy/50 hover:text-gold-dim transition">View Details →</a>
         </div>
       </div>
     </div>`;
@@ -1169,6 +1169,15 @@ async function sendChat() {
     log.insertAdjacentHTML('beforeend', `<div id="${replyId}" class="bg-navy-card rounded-md p-3 text-sand/90 text-sm"></div>`);
     typewrite(document.getElementById(replyId), reply, log, () => {
       if (shouldCapture && !conciergeLeadCaptured) renderInlineCapture(log);
+      // If the concierge's search tool found real matches, show them where
+      // the rest of the page's listings already render -- same cards, same
+      // "Contact us" button, same compliance elements -- not a separate UI.
+      if (data.listings && data.listings.length) {
+        const grid = document.getElementById('listing-grid');
+        grid.innerHTML = `<p class="col-span-full font-serif text-lg text-navy mb-1">Current listings matching what you described:</p>` +
+          data.listings.map(renderIdxCard).join('') + idxDisclaimerHtml();
+        grid.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     });
 
     chatHistory.push({ role: 'user', content: text });
