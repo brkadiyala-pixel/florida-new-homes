@@ -915,7 +915,7 @@ async function sendChat() {
     typewrite(document.getElementById(replyId), reply, log, () => {
       if (suggestOptions.length) {
         const pillsHtml = `<div class="flex flex-wrap gap-2 mt-1">${suggestOptions.map(opt =>
-          `<button type="button" onclick="chatChip(${JSON.stringify(opt)})" class="text-sand/80 text-xs border border-gold/30 rounded-full px-3 py-1.5 hover:border-gold hover:bg-gold hover:text-navy transition">${opt}</button>`
+          `<button type="button" onclick="chatChip(${JSON.stringify(opt).replace(/"/g, '&quot;')})" class="text-sand/80 text-xs border border-gold/30 rounded-full px-3 py-1.5 hover:border-gold hover:bg-gold hover:text-navy transition">${opt}</button>`
         ).join('')}</div>`;
         log.insertAdjacentHTML('beforeend', pillsHtml);
         log.scrollTop = log.scrollHeight;
