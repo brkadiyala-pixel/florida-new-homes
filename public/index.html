@@ -932,6 +932,15 @@ async function sendChat() {
       reply = reply.replace('[CAPTURE_LEAD]', '').trim();
     }
 
+    // Parse the seller-intent marker -- once seen, the eventual capture
+    // form should route as a seller lead (correctly tagged for kvCORE's
+    // Buyer/Seller field), not the generic buyer path, and persists for
+    // the rest of this conversation once detected.
+    if (reply.includes('[INTENT: seller]')) {
+      conciergeDetectedSellerIntent = true;
+      reply = reply.replace('[INTENT: seller]', '').trim();
+    }
+
     // Parse the quick-reply button marker: "[SUGGEST: A | B | C]" -- up to
     // 5 short options rendered as clickable pills right under this message,
     // instead of forcing the person back to open free text every turn.
@@ -998,15 +1007,20 @@ async function sendChat() {
    into the chat log, so a serious prospect doesn't have to leave the
    conversation to be captured. Shown at most once per session. */
 let conciergeLeadCaptured = false;
+let conciergeDetectedSellerIntent = false;
 function renderInlineCapture(log, prefillPhone, prefillEmail) {
   const id = 'inline-capture-' + Date.now();
+  const promptText = conciergeDetectedSellerIntent
+    ? 'Share your name and best contact so we can prepare your property valuation:'
+    : 'Share your name and best contact so a specialist can follow up:';
+  const buttonText = conciergeDetectedSellerIntent ? 'Request my valuation' : 'Connect me with a specialist';
   log.insertAdjacentHTML('beforeend', `
     <div id="${id}" class="bg-navy-card border border-gold/30 rounded-md p-3 space-y-2">
-      <p class="text-sand/70 text-xs">Share your name and best contact so a specialist can follow up:</p>
+      <p class="text-sand/70 text-xs">${promptText}</p>
       <input id="${id}-name" type="text" placeholder="Full name" class="w-full bg-navy border border-navy-line rounded-full px-3 py-2 text-sand text-sm focus:outline-none focus:border-gold">
       <input id="${id}-email" type="email" placeholder="Email address" value="${prefillEmail || ''}" class="w-full bg-navy border border-navy-line rounded-full px-3 py-2 text-sand text-sm focus:outline-none focus:border-gold">
       <input id="${id}-phone" type="tel" placeholder="Phone (optional)" value="${prefillPhone || ''}" class="w-full bg-navy border border-navy-line rounded-full px-3 py-2 text-sand text-sm focus:outline-none focus:border-gold">
-      <button onclick="submitInlineCapture('${id}')" class="w-full bg-gold text-navy font-medium rounded-full py-2 text-sm hover:bg-gold-light transition">Connect me with a specialist</button>
+      <button onclick="submitInlineCapture('${id}')" class="w-full bg-gold text-navy font-medium rounded-full py-2 text-sm hover:bg-gold-light transition">${buttonText}</button>
       <p id="${id}-status" class="text-xs text-sand/40 text-center"></p>
     </div>`);
   log.scrollTop = log.scrollHeight;
@@ -1020,15 +1034,23 @@ async function submitInlineCapture(id) {
   if (!name || !email) { status.textContent = 'Please enter your name and email.'; return; }
   status.textContent = 'Sending...';
   const conversationSummary = chatHistory.slice(-6).map(m => `${m.role === 'user' ? 'Visitor' : 'Concierge'}: ${m.content}`).join('\n');
+  // Tag as a seller lead (correctly routed to kvCORE's Seller deal type,
+  // same as the existing "Request a valuation" button elsewhere on the
+  // site) when the conversation established seller intent -- not lumped
+  // in as a generic buyer inquiry.
+  const leadSource = conciergeDetectedSellerIntent ? 'seller' : 'concierge-inline';
   try {
     const res = await fetch('/api/lead', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, phone, source: 'concierge-inline', site: 'luxuryredefinedpb.com', message: conversationSummary })
+      body: JSON.stringify({ name, email, phone, source: leadSource, site: 'luxuryredefinedpb.com', message: conversationSummary })
     });
     if (!res.ok) throw new Error('failed');
     conciergeLeadCaptured = true;
-    document.getElementById(id).outerHTML = `<div class="bg-navy-card rounded-md p-3 text-sand/90 text-sm">Thank you, ${name.trim().split(' ')[0]} — Bharath's team will be in touch shortly.</div>`;
+    const confirmText = conciergeDetectedSellerIntent
+      ? `Thank you, ${name.trim().split(' ')[0]} — Bharath's team will follow up to schedule your valuation.`
+      : `Thank you, ${name.trim().split(' ')[0]} — Bharath's team will be in touch shortly.`;
+    document.getElementById(id).outerHTML = `<div class="bg-navy-card rounded-md p-3 text-sand/90 text-sm">${confirmText}</div>`;
     saveConciergeSession();
   } catch (e) {
     status.textContent = 'Something went wrong. Please call (813) 400-0620.';
@@ -1044,6 +1066,7 @@ function saveConciergeSession() {
     sessionStorage.setItem('concierge-history', JSON.stringify(chatHistory));
     sessionStorage.setItem('concierge-log-html', document.getElementById('chat-log').innerHTML);
     sessionStorage.setItem('concierge-lead-captured', conciergeLeadCaptured ? '1' : '0');
+    sessionStorage.setItem('concierge-seller-intent', conciergeDetectedSellerIntent ? '1' : '0');
   } catch (e) { /* storage unavailable — fail silently, conversation just won't persist */ }
 }
 function restoreConciergeSession() {
@@ -1054,6 +1077,7 @@ function restoreConciergeSession() {
       chatHistory = JSON.parse(savedHistory);
       document.getElementById('chat-log').innerHTML = savedLog;
       conciergeLeadCaptured = sessionStorage.getItem('concierge-lead-captured') === '1';
+      conciergeDetectedSellerIntent = sessionStorage.getItem('concierge-seller-intent') === '1';
       const starterChips = document.getElementById('starter-chips');
       if (starterChips) starterChips.style.display = 'none';
     }
