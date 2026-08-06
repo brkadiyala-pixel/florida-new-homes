@@ -707,14 +707,19 @@ function renderIdxListingCard(raw) {
 
 // Required verbatim per BeachesMLS IDX Rules Section 20.3.7.
 const IDX_DISCLAIMER_TEXT = 'IDX information is provided exclusively for consumers\' personal, non-commercial use. It may not be used for any purpose other than to identify prospective properties consumers may be interested in purchasing. Data is deemed reliable but is not guaranteed accurate by BeachesMLS.';
-// Required substantially per Section 20.3.7 / 21.17 (copyright + logo notice).
-const IDX_COPYRIGHT_TEXT = `All listings featuring the BMLS logo are provided by BeachesMLS, Inc. This information is not verified for authenticity or accuracy and is not guaranteed. Copyright © ${new Date().getFullYear()} BeachesMLS, Inc.`;
 
 function renderIdxDisclaimerBlock() {
+  // The year is computed here, inside the function, every time it actually
+  // renders -- not as a module-level constant evaluated once when the
+  // Worker script loads (or at build time), which is what let a single
+  // bad clock reading (a build environment with a broken/unset system
+  // clock, reset to the Unix epoch) get permanently baked in as "1970"
+  // for as long as that isolate/constant stayed alive.
+  const copyrightText = `All listings featuring the BMLS logo are provided by BeachesMLS, Inc. This information is not verified for authenticity or accuracy and is not guaranteed. Copyright &copy; ${new Date().getFullYear()} BeachesMLS, Inc.`;
   return `
-    <div class="mt-6 pt-6 border-t border-navy/10 flex flex-col md:flex-row items-start md:items-center gap-4">
-      <img src="/images/beachesmls-logo.png" alt="BeachesMLS" class="h-6 w-auto">
-      <p class="text-[11px] text-navy/50 leading-snug max-w-2xl">${IDX_COPYRIGHT_TEXT} ${IDX_DISCLAIMER_TEXT}</p>
+    <div class="mt-4 pt-3 border-t border-navy/10 flex items-center gap-3">
+      <img src="/images/beachesmls-logo.png" alt="BeachesMLS" class="h-4 w-auto shrink-0">
+      <p class="text-[10px] text-navy/45 leading-snug">${copyrightText} ${IDX_DISCLAIMER_TEXT}</p>
     </div>`;
 }
 
