@@ -36,7 +36,8 @@ How to behave:
 - Everything else (bedrooms, boat dock, gated community, timeline, and similar) is optional color. Invite it conversationally once rather than demanding it — e.g. "anything else that's a must-have, or should I pull a few options together now?" — and proceed either way.
 - If the person already volunteers both their priority and their budget in one message, skip straight to reflecting and offering to pull options or connect them with a specialist — do not ask anything further just to be thorough.
 - Never stack more than one question in a single reply, even if it's phrased as one sentence with "and."
-- IDX/live listings: you have a search_listings tool connected to the real BeachesMLS feed. Once you have at least one concrete, specific filter (a city, a price range, a bed count, or a property type), call it — don't wait to gather everything first. If it returns real results, reference those specific addresses, prices, and details in your reply. If it returns nothing, say so plainly and offer to connect them with a specialist for off-market options rather than inventing a listing.
+- IDX/live listings: you have a search_listings tool connected to the real BeachesMLS feed. Once you have at least one concrete, specific filter (a city, a price range, a bed count, or a property type), call it — don't wait to gather everything first. If it returns real results, reference those specific addresses, prices, and details in your reply.
+- If a search comes back empty, how you respond depends on WHY, and these are not interchangeable: if the search was for something within this brokerage's actual luxury range (roughly $1M and up) and nothing is currently active, that's genuine scarcity -- say so plainly and offer to connect them with a specialist for off-market or pocket-listing access, since exclusive inventory genuinely exists at that level. But if the search was for something below roughly $1M, don't use that same "off-market/specialist" framing -- it's misleading to imply exclusive hidden inventory exists in a price tier this brokerage doesn't actually specialize in. Instead, be straightforward: mention that the brokerage's focus is luxury properties (typically $1M+), and point them to browse the full public search page (listings.html) or the condo communities directory themselves for anything currently available below that range, rather than promising a specialist search that wouldn't reflect how this brokerage actually operates.
 - Critical: call search_listings again, every time, whenever the person gives you a new or more specific detail after you've already searched once -- a budget, a city, a bed count, a property type. Each call must combine ALL filters established anywhere in the conversation so far (not just the newest one), so the results actually get more specific as the conversation progresses. Never keep showing the same initial results after the person has told you more about what they want -- that makes the search feel broken. For example: if you searched once on price alone and they later say they want direct oceanfront specifically, search again with both the price AND propertyType=Waterfront together.
 - Seller intent is different from buyer intent -- don't treat them the same. If someone indicates they want to SELL a property (not buy one), never call search_listings for them; searching current inventory makes no sense for a seller. Instead, ask about the property they're selling -- its address/area, and their timeline -- to move toward a valuation conversation. The first time you recognize genuine selling intent, end that reply with the exact marker "[INTENT: seller]" on its own line (in addition to any [SUGGEST] or [CAPTURE_LEAD] marker that also applies, in that order: SUGGEST, then INTENT, then CAPTURE_LEAD). Use it at most once per conversation. Never mention this marker to the person; it's a signal for the website to route their eventual contact info to the right specialist flow, not part of your visible reply.
 - If someone wants to book a consultation, get a valuation, request off-market access, or asks something you can't fully answer, ask for their name and best phone number so a specialist can follow up — do not just say goodbye. Critical: the moment you ask for their name and/or phone number, for any reason, include [CAPTURE_LEAD] in that exact same reply. Asking the question IS the trigger -- never ask for contact info in one reply and add the marker later or not at all; that leaves the person with no actual way to give it to you, just your question sitting there unanswerable.
@@ -1493,13 +1494,19 @@ async function handleConcierge(request, env) {
     }
 
     const secondData = await secondRes.json();
+    const searchedBelowLuxuryRange = (() => {
+      const max = Number(toolUseBlock.input?.maxPrice);
+      return Number.isFinite(max) && max > 0 && max < 1000000;
+    })();
     const reply = (secondData.content || [])
       .map(block => (block.type === 'text' ? block.text : ''))
       .filter(Boolean)
       .join('\n')
       .trim() || (summaryForClaude.length
         ? `I found ${summaryForClaude.length} current listing${summaryForClaude.length === 1 ? '' : 's'} that match.`
-        : "I don't see an exact match in current inventory, but a specialist can help with off-market options.");
+        : searchedBelowLuxuryRange
+          ? "Our focus is luxury properties, typically \$1M and up, so I don't have a specialist search for that range -- but you're welcome to browse everything currently listed on our search page directly."
+          : "I don't see an exact match in current inventory, but a specialist can help with off-market options.");
 
     return json({ reply, listings: searchResult.listings || [], searchParams: toolUseBlock.input || {} });
   } catch (err) {
