@@ -176,37 +176,38 @@
     </div>
 
     <!-- RIGHT: Luxury Home Concierge, as its own panel -->
-    <div id="concierge" class="bg-navy-deep rounded-sm p-7 flex flex-col border border-gold/20">
-      <div class="flex items-center gap-3 mb-1">
+    <div id="concierge" class="bg-navy-deep rounded-sm p-8 flex flex-col border border-gold/10">
+      <div class="flex items-center gap-3 mb-5">
         <div class="w-10 h-10 rounded-full bg-gold flex items-center justify-center text-navy font-serif text-lg">L</div>
         <div>
           <p class="text-sand font-medium text-base">Palm Beach Concierge</p>
-          <p class="text-sand/50 text-xs flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-gold inline-block pulse-dot"></span>Private property matching · guided by Bharath Kadiyala</p>
+          <p class="text-sand/50 text-xs flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-gold inline-block pulse-dot"></span>Private property matching, guided by Bharath Kadiyala.</p>
         </div>
       </div>
 
-      <div id="chat-log" class="space-y-3 mt-4 mb-4 max-h-80 overflow-y-auto pr-1">
-        <div class="bg-navy-card rounded-md p-3 text-sand/90 text-sm">What are you looking for?</div>
-      </div>
+      <div id="chat-log" class="space-y-3 mb-4 max-h-80 overflow-y-auto pr-1 empty:hidden"></div>
 
-      <div id="starter-chips" class="flex flex-wrap gap-2 mb-4">
-        <button type="button" onclick="chatChip('Waterfront home')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Waterfront</button>
-        <button type="button" onclick="chatChip('Golf community home')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Golf</button>
-        <button type="button" onclick="chatChip('New construction home')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">New Construction</button>
-        <button type="button" onclick="chatChip('Home in a private club community')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Private Clubs</button>
-        <button type="button" onclick="chatChip('Off-market properties')" class="text-sand/80 text-sm border border-gold/25 rounded-full px-3 py-1.5 hover:border-gold transition">Off-Market</button>
+      <div id="starter-chips" class="flex flex-wrap gap-1.5 mb-5">
+        <button type="button" onclick="chatChip('Waterfront home')" class="text-sand/70 text-xs border border-sand/15 rounded-full px-3 py-1 hover:border-gold hover:text-gold transition">Waterfront</button>
+        <button type="button" onclick="chatChip('Golf community home')" class="text-sand/70 text-xs border border-sand/15 rounded-full px-3 py-1 hover:border-gold hover:text-gold transition">Golf</button>
+        <button type="button" onclick="chatChip('New construction home')" class="text-sand/70 text-xs border border-sand/15 rounded-full px-3 py-1 hover:border-gold hover:text-gold transition">New Construction</button>
+        <button type="button" onclick="chatChip('Home in a private club community')" class="text-sand/70 text-xs border border-sand/15 rounded-full px-3 py-1 hover:border-gold hover:text-gold transition">Private Clubs</button>
+        <button type="button" onclick="chatChip('Off-market properties')" class="text-sand/70 text-xs border border-sand/15 rounded-full px-3 py-1 hover:border-gold hover:text-gold transition">Off-Market</button>
       </div>
 
       <!-- Compose bar: pinned at the bottom, used for both the opening
            message and every reply after -- matches how a real conversation
            works (you reply near the latest message, not from a box fixed
-           at the top of an ever-growing thread). -->
+           at the top of an ever-growing thread). The input's own placeholder
+           text is the only prompt -- no separate "what are you looking for"
+           bubble asking the same question twice. -->
       <div class="flex gap-2 mt-auto">
         <input id="quick-search-input" type="text" placeholder="Oceanfront home in Jupiter under $8M with a dock..."
           class="flex-1 bg-navy-card border border-gold/30 rounded-full px-4 py-3 text-sand text-sm focus:outline-none focus:border-gold"
           onkeydown="if(event.key==='Enter') quickSearch()">
-        <button onclick="quickSearch()" aria-label="Curate my search" title="Curate my search" class="w-11 h-11 shrink-0 rounded-full bg-gold text-navy flex items-center justify-center hover:bg-gold-light transition text-lg">→</button>
+        <button onclick="quickSearch()" aria-label="Find my homes" title="Find my homes" class="w-11 h-11 shrink-0 rounded-full bg-gold text-navy flex items-center justify-center hover:bg-gold-light transition text-lg">→</button>
       </div>
+      <p class="text-sand/30 text-[11px] text-center mt-3">Private guidance from search to closing.</p>
 
       <input id="chat-input" type="hidden">
     </div>
