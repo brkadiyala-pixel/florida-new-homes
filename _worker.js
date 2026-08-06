@@ -717,7 +717,7 @@ function renderIdxDisclaimerBlock() {
   // for as long as that isolate/constant stayed alive.
   const copyrightText = `All listings featuring the BMLS logo are provided by BeachesMLS, Inc. This information is not verified for authenticity or accuracy and is not guaranteed. Copyright &copy; ${new Date().getFullYear()} BeachesMLS, Inc.`;
   return `
-    <div class="mt-4 pt-3 border-t border-navy/10 flex items-center gap-3">
+    <div class="col-span-full mt-4 pt-3 border-t border-navy/10 flex items-center gap-3">
       <img src="/images/beachesmls-logo.png" alt="BeachesMLS" class="h-4 w-auto shrink-0">
       <p class="text-[10px] text-navy/45 leading-snug">${copyrightText} ${IDX_DISCLAIMER_TEXT}</p>
     </div>`;
