@@ -703,6 +703,27 @@ async function runIDXSearch() {
    ===================================================================== */
 let chatHistory = [];
 
+// ============================================================
+// SHARED SEARCH STATE (Phase 1 foundation)
+// Identical to the helpers on listings.html -- both pages read/write the
+// same sessionStorage key, so a search run on either side is known to the
+// other. Deliberately narrow: just the 5 fields the real search already
+// supports and has verified against actual MLS data (city, minPrice,
+// maxPrice, beds, propertyType), not the larger buyer-profile concept
+// (dock, waterfront type, gated, etc.) from the broader blueprint -- those
+// need real MLS field verification first, the same lesson as everything
+// else built tonight.
+const SEARCH_STATE_KEY = 'luxury-search-state';
+function getSharedSearchState() {
+  try { return JSON.parse(sessionStorage.getItem(SEARCH_STATE_KEY) || '{}'); } catch { return {}; }
+}
+function setSharedSearchState(partial) {
+  try {
+    const merged = { ...getSharedSearchState(), ...partial, updatedAt: Date.now() };
+    sessionStorage.setItem(SEARCH_STATE_KEY, JSON.stringify(merged));
+  } catch { /* sessionStorage unavailable -- fail silently, not critical */ }
+}
+
 /* Typewriter placeholder — types each example phrase out one character
    at a time, pauses, deletes it, then types the next. Pauses entirely
    while the field is focused or has text, and renders the first phrase
@@ -891,7 +912,7 @@ async function sendChat() {
     const res = await fetch('/api/concierge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, history: chatHistory })
+      body: JSON.stringify({ message: text, history: chatHistory, searchContext: getSharedSearchState() })
     });
     const data = await res.json();
     const thinkingEl = document.getElementById(thinkingId);
@@ -947,6 +968,12 @@ async function sendChat() {
         log.insertAdjacentHTML('beforeend', cardsHtml);
         log.scrollTop = log.scrollHeight;
       }
+      // Feed back what the concierge actually searched with, so a manual
+      // search on listings.html afterward starts from the same criteria
+      // instead of a blank slate -- completing the loop in the other
+      // direction (listings.html -> concierge is handled by sending
+      // searchContext with every request above).
+      if (data.searchParams) setSharedSearchState(data.searchParams);
       // Saved here, not synchronously after starting typewrite() -- typewrite
       // is asynchronous (requestAnimationFrame/setTimeout) and returns
       // immediately, so saving right after calling it was capturing the chat

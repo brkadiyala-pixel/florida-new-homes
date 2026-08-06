@@ -305,11 +305,35 @@ function idxDisclaimerHtml() {
     </div>`;
 }
 
+// ============================================================
+// SHARED SEARCH STATE (Phase 1 foundation)
+// A small, deliberately narrow buyer-profile object shared between the
+// traditional IDX filters here and the concierge chat on the homepage, via
+// sessionStorage (no server-side session/accounts exist, so this is the
+// simplest mechanism that actually works across page navigation within one
+// visit). Scoped to exactly the 5 fields the real search already supports
+// and has verified against actual MLS data (city, minPrice, maxPrice, beds,
+// propertyType) -- not the larger buyer-profile concept (dock, waterfront
+// type, gated, etc.) from the broader blueprint, since those aren't backed
+// by confirmed MLS fields yet. Get that verified first; the mechanism here
+// is built to extend once they are.
+const SEARCH_STATE_KEY = 'luxury-search-state';
+function getSharedSearchState() {
+  try { return JSON.parse(sessionStorage.getItem(SEARCH_STATE_KEY) || '{}'); } catch { return {}; }
+}
+function setSharedSearchState(partial) {
+  try {
+    const merged = { ...getSharedSearchState(), ...partial, updatedAt: Date.now() };
+    sessionStorage.setItem(SEARCH_STATE_KEY, JSON.stringify(merged));
+  } catch { /* sessionStorage unavailable -- fail silently, not critical */ }
+}
+
 // Set via URL param (used by the new-developments page's "Explore" links to
 // jump straight to a specific development's real active inventory) --
 // not tied to a visible dropdown, since most searches don't need it, but
 // persists across pagination once present.
 let activeSubdivisionFilter = null;
+let activeAddressFilter = null;
 let activeDevelopmentName = null;
 
 function buildParams(page) {
@@ -327,8 +351,24 @@ function buildParams(page) {
   else if (price === '$5M – $10M') { params.set('minPrice', '5000000'); params.set('maxPrice', '10000000'); }
   else if (price === '$10M+') { params.set('minPrice', '10000000'); }
   if (activeSubdivisionFilter) params.set('subdivision', activeSubdivisionFilter);
+  if (activeAddressFilter) params.set('address', activeAddressFilter);
   params.set('page', String(page));
   params.set('pageSize', String(PAGE_SIZE));
+
+  // Feed a manual search's filters back into the shared state, so if the
+  // person later opens the concierge, it already knows what they've
+  // selected here -- not a subdivision/address-specific development link,
+  // just the general buyer-profile fields.
+  if (!activeSubdivisionFilter && !activeAddressFilter) {
+    setSharedSearchState({
+      city: params.get('city') || null,
+      minPrice: params.get('minPrice') || null,
+      maxPrice: params.get('maxPrice') || null,
+      beds: params.get('beds') || null,
+      propertyType: params.get('propertyType') || null
+    });
+  }
+
   return params;
 }
 
@@ -430,34 +470,57 @@ async function submitLead() {
   }
 }
 
-// Reads ?city=, ?propertyType=, ?minPrice=, ?subdivision= from the URL
-// (subdivision is used by the "Explore"/"Request Availability" links on the
-// New Developments page, to jump straight to that development's real
-// current inventory) and pre-sets the matching dropdown / filter before the
-// initial search runs.
+// Reads ?city=, ?propertyType=, ?minPrice=, ?subdivision=, ?address= from
+// the URL (subdivision/address are used by the "Explore"/"Request
+// Availability" links on the New Developments page, to jump straight to
+// that development's real current inventory) and pre-sets the matching
+// dropdown / filter before the initial search runs. If none of those are
+// present at all, falls back to the shared search state (Phase 1 of the
+// concierge/IDX shared-state foundation) so arriving here after already
+// using the concierge -- or the traditional search elsewhere -- doesn't
+// start from a blank slate.
 function applyUrlParams() {
   const params = new URLSearchParams(window.location.search);
   const city = params.get('city');
   const propertyType = params.get('propertyType');
   const minPrice = params.get('minPrice');
+  const maxPrice = params.get('maxPrice');
   const subdivision = params.get('subdivision');
+  const address = params.get('address');
   const developmentName = params.get('development');
 
-  if (city) {
+  const hasAnyUrlFilter = Boolean(city || propertyType || minPrice || maxPrice || subdivision || address);
+  const state = !hasAnyUrlFilter ? getSharedSearchState() : null;
+
+  const effectiveCity = city || (state && state.city);
+  const effectivePropertyType = propertyType || (state && state.propertyType);
+  const effectiveMinPrice = minPrice || (state && state.minPrice);
+  const effectiveMaxPrice = maxPrice || (state && state.maxPrice);
+  const effectiveBeds = state && state.beds;
+
+  if (effectiveCity) {
     const regionSelect = document.getElementById('f-region');
-    if ([...regionSelect.options].some(o => o.value === city)) regionSelect.value = city;
+    if ([...regionSelect.options].some(o => o.value === effectiveCity)) regionSelect.value = effectiveCity;
   }
-  if (propertyType) {
+  if (effectivePropertyType) {
     const typeSelect = document.getElementById('f-type');
-    if ([...typeSelect.options].some(o => o.value === propertyType)) typeSelect.value = propertyType;
+    if ([...typeSelect.options].some(o => o.value === effectivePropertyType)) typeSelect.value = effectivePropertyType;
   }
-  if (minPrice === '10000000') {
-    document.getElementById('f-price').value = '$10M+';
+  if (effectiveBeds) {
+    const bedsSelect = document.getElementById('f-beds');
+    const bedsOption = effectiveBeds + '+';
+    if ([...bedsSelect.options].some(o => o.value === bedsOption)) bedsSelect.value = bedsOption;
   }
-  if (subdivision) {
-    activeSubdivisionFilter = subdivision;
+  if (String(effectiveMinPrice) === '1000000' && String(effectiveMaxPrice) === '2000000') document.getElementById('f-price').value = '$1M – $2M';
+  else if (String(effectiveMinPrice) === '2000000' && String(effectiveMaxPrice) === '5000000') document.getElementById('f-price').value = '$2M – $5M';
+  else if (String(effectiveMinPrice) === '5000000' && String(effectiveMaxPrice) === '10000000') document.getElementById('f-price').value = '$5M – $10M';
+  else if (String(effectiveMinPrice) === '10000000') document.getElementById('f-price').value = '$10M+';
+
+  if (subdivision) activeSubdivisionFilter = subdivision;
+  if (address) activeAddressFilter = address;
+  if (subdivision || address) {
     if (developmentName) activeDevelopmentName = developmentName;
-    // A subdivision link means "show me everything at this development" --
+    // A development link means "show me everything at this development" --
     // not "show me everything at this development that also happens to
     // fall inside the page's generic default price bracket." Without this,
     // the price dropdown's default ($2M-$5M) silently filtered out every
@@ -465,8 +528,8 @@ function applyUrlParams() {
     // Flagler House, Ritz-Carlton, and Panther National appear to have zero
     // listings even though real, active inventory existed the whole time.
     // Only reset it if the URL didn't itself explicitly ask for a price
-    // range alongside the subdivision.
-    if (!minPrice && !params.get('maxPrice')) {
+    // range alongside the development filter.
+    if (!minPrice && !maxPrice) {
       document.getElementById('f-price').value = 'Any price';
     }
   }

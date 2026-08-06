@@ -1376,6 +1376,29 @@ async function handleConcierge(request, env) {
         .map(m => ({ role: m.role, content: m.content.slice(0, 2000) }))
     : [];
 
+  // Phase 1 of the shared search-state foundation: if the traditional IDX
+  // filters already have known values (city/price/beds/propertyType), fold
+  // them into the system prompt for this one request so the concierge
+  // doesn't ask the person to repeat information it can already see. This
+  // is intentionally limited to the exact 5 fields the site's real search
+  // already supports and has verified against actual MLS data -- not the
+  // larger buyer-profile schema (dock, waterfront type, gated, etc.) from
+  // the broader blueprint, since those aren't backed by confirmed MLS
+  // fields yet and adding them here would just be guessing in a new place.
+  let systemPrompt = SYSTEM_PROMPT;
+  const searchContext = body.searchContext && typeof body.searchContext === 'object' ? body.searchContext : null;
+  if (searchContext) {
+    const known = [];
+    if (searchContext.city) known.push(`city: ${searchContext.city}`);
+    if (searchContext.minPrice) known.push(`minimum price: $${Number(searchContext.minPrice).toLocaleString('en-US')}`);
+    if (searchContext.maxPrice) known.push(`maximum price: $${Number(searchContext.maxPrice).toLocaleString('en-US')}`);
+    if (searchContext.beds) known.push(`minimum bedrooms: ${searchContext.beds}`);
+    if (searchContext.propertyType) known.push(`property type: ${searchContext.propertyType}`);
+    if (known.length) {
+      systemPrompt += `\n\nThe visitor already has these filters set on the traditional search on this site: ${known.join(', ')}. Treat this as already known -- do not ask about it again unless they want to change it, and use it as a starting point for search_listings if they haven't given you anything more specific yet.`;
+    }
+  }
+
   const messages = [...history, { role: 'user', content: message }];
 
   try {
@@ -1389,7 +1412,7 @@ async function handleConcierge(request, env) {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 400,
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         messages,
         tools: env.SPARK_ACCESS_TOKEN ? [SEARCH_LISTINGS_TOOL] : undefined
       })
@@ -1443,7 +1466,7 @@ async function handleConcierge(request, env) {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 400,
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         tools: [SEARCH_LISTINGS_TOOL],
         messages: [
           ...messages,
@@ -1467,7 +1490,7 @@ async function handleConcierge(request, env) {
         ? `I found ${summaryForClaude.length} current listing${summaryForClaude.length === 1 ? '' : 's'} that match.`
         : "I don't see an exact match in current inventory, but a specialist can help with off-market options.");
 
-    return json({ reply, listings: searchResult.listings || [] });
+    return json({ reply, listings: searchResult.listings || [], searchParams: toolUseBlock.input || {} });
   } catch (err) {
     return json({ error: 'Unexpected error contacting the AI service', detail: String(err) }, 500);
   }
