@@ -1456,6 +1456,24 @@ async function handleConcierge(request, env) {
       searchResult = { listings: [], total: 0, error: String(err) };
     }
 
+    // Deterministic override, not just a prompt instruction: a search below
+    // this brokerage's actual luxury range that comes back empty should
+    // never get the "off-market/specialist" framing -- that implies
+    // exclusive hidden inventory exists in a tier this brokerage doesn't
+    // actually specialize in, which is misleading. Checking this in code
+    // (rather than trusting the system prompt alone) guarantees it, since a
+    // real test showed the AI didn't reliably apply this distinction from
+    // the natural-language instruction alone.
+    const searchedMaxPrice = Number(toolUseBlock.input?.maxPrice);
+    const searchedBelowLuxuryRange = Number.isFinite(searchedMaxPrice) && searchedMaxPrice > 0 && searchedMaxPrice < 1000000;
+    if (!searchResult.listings.length && searchedBelowLuxuryRange) {
+      return json({
+        reply: "Our focus is luxury properties, typically $1M and up, so I don't have a specialist search for that range. You're welcome to browse everything currently listed on our search page directly, or the condo communities directory if you're looking at condos specifically.",
+        listings: [],
+        searchParams: toolUseBlock.input || {}
+      });
+    }
+
     // Send Claude a compact summary (not full Media arrays / raw payloads)
     // so it can reference real specifics without bloating token usage --
     // the full raw listings go back to the frontend separately, for
@@ -1494,19 +1512,13 @@ async function handleConcierge(request, env) {
     }
 
     const secondData = await secondRes.json();
-    const searchedBelowLuxuryRange = (() => {
-      const max = Number(toolUseBlock.input?.maxPrice);
-      return Number.isFinite(max) && max > 0 && max < 1000000;
-    })();
     const reply = (secondData.content || [])
       .map(block => (block.type === 'text' ? block.text : ''))
       .filter(Boolean)
       .join('\n')
       .trim() || (summaryForClaude.length
         ? `I found ${summaryForClaude.length} current listing${summaryForClaude.length === 1 ? '' : 's'} that match.`
-        : searchedBelowLuxuryRange
-          ? "Our focus is luxury properties, typically \$1M and up, so I don't have a specialist search for that range -- but you're welcome to browse everything currently listed on our search page directly."
-          : "I don't see an exact match in current inventory, but a specialist can help with off-market options.");
+        : "I don't see an exact match in current inventory, but a specialist can help with off-market options.");
 
     return json({ reply, listings: searchResult.listings || [], searchParams: toolUseBlock.input || {} });
   } catch (err) {
