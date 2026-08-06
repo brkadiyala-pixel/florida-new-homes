@@ -934,6 +934,16 @@ async function sendChat() {
       reply = reply.replace('[CAPTURE_LEAD]', '').trim();
     }
 
+    // Deterministic safety net: if the AI's own reply asks for a name/phone
+    // number but forgot the marker, render the capture form anyway. Don't
+    // rely solely on the AI remembering to include [CAPTURE_LEAD] every
+    // time it asks -- this closes the gap where the AI verbally asks
+    // "what's your name and phone number?" with no actual way for the
+    // person to give it, since nothing rendered the real form.
+    if (!shouldCapture && /\b(name and|phone number|best number|contact number)\b/i.test(reply)) {
+      shouldCapture = true;
+    }
+
     // Parse the seller-intent marker -- once seen, the eventual capture
     // form should route as a seller lead (correctly tagged for kvCORE's
     // Buyer/Seller field), not the generic buyer path, and persists for
