@@ -1346,6 +1346,119 @@ async function runCitationMonitorJob(env) {
   return { ok: true, monthLabel, citedCount, total: results.length };
 }
 
+/* =====================================================================
+   5. SEO TREND RECOMMENDATIONS
+   Runs monthly. Uses Claude WITH real web search to research current,
+   genuine trends in luxury real estate (nationally and in Palm Beach
+   County specifically) and cross-checks them against the site's existing
+   Insights articles, so it recommends new topics rather than duplicating
+   what's already covered. Drafts recommendations only -- emails them for
+   review, same as every other job here. Does not include keyword search
+   volume, competition scores, or ranking difficulty -- those need a paid
+   third-party SEO tool (Ahrefs/SEMrush/Google Keyword Planner) this site
+   isn't integrated with; faking those numbers would be worse than not
+   showing them.
+   ===================================================================== */
+
+// Update this list by hand whenever a new Insights article is published --
+// there's no CMS/admin interface for Insights yet, so this can't be
+// queried dynamically the way the condo directory or new developments
+// data can.
+const EXISTING_INSIGHTS_TOPICS = [
+  'The new era of Palm Beach luxury home design (design trends/architecture)',
+  'Palm Beach County Luxury Market Report -- Spring 2026 (market conditions, pricing, inventory)',
+  'Jupiter vs. Boca Raton: choosing your community (community comparison guide)'
+];
+
+const SEO_TRENDS_SYSTEM_PROMPT = `You are a research analyst helping a luxury real estate brokerage (Luxury Redefined Palm Beach, serving Palm Beach, West Palm Beach, Jupiter, Boca Raton, Manalapan, and Delray Beach) find genuinely new, timely article topics for their Insights section.
+
+Use web search to find real, current trends in luxury real estate broadly and Palm Beach County specifically -- buyer behavior shifts, migration patterns, what people are actually searching for or asking about right now. Ground every recommendation in what you actually find; never invent a trend.
+
+The site's existing Insights articles already cover:
+${EXISTING_INSIGHTS_TOPICS.map(t => `- ${t}`).join('\n')}
+
+Recommend 5 NEW article topics that don't duplicate those. For each, give:
+- A working title
+- The core angle in one sentence
+- A target search phrase a real buyer might use (not a guessed keyword-volume number -- just the phrase itself)
+- One sentence on why it's timely right now, citing what you found
+
+Respond ONLY with a JSON array, no other text, no markdown fences:
+[{"title": "...", "angle": "...", "targetPhrase": "...", "whyNow": "..."}]`;
+
+async function runSeoTrendsJob(env) {
+  if (!env.ANTHROPIC_API_KEY || !env.RESEND_API_KEY) {
+    console.log('SEO trends job skipped: missing ANTHROPIC_API_KEY or RESEND_API_KEY');
+    return { ok: false, error: 'Missing ANTHROPIC_API_KEY or RESEND_API_KEY' };
+  }
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 2048,
+        system: SEO_TRENDS_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: 'Research current luxury real estate trends and recommend 5 new Insights article topics for this month.' }],
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }]
+      })
+    });
+
+    if (!res.ok) {
+      const detail = await res.text();
+      console.log('SEO trends job: AI request failed', detail);
+      return { ok: false, error: 'AI request failed', detail };
+    }
+
+    const data = await res.json();
+    const raw = (data.content || []).map(b => (b.type === 'text' ? b.text : '')).join('').trim();
+
+    let recommendations;
+    try {
+      recommendations = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ''));
+    } catch {
+      console.log('SEO trends job: could not parse AI response:', raw);
+      return { ok: false, error: 'Could not parse AI response', raw };
+    }
+
+    const monthLabel = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'America/New_York' });
+
+    if (env.REPORTS_KV) {
+      await env.REPORTS_KV.put('seo-trends-latest', JSON.stringify({ monthLabel, recommendations, generatedAt: new Date().toISOString() }));
+    }
+
+    const toAddress = env.LEAD_EMAIL || 'brkadiyala@gmail.com';
+    const fromAddress = env.FROM_EMAIL || 'Luxury Redefined <leads@luxuryredefined.homes>';
+    const text = [
+      `Insights topic recommendations -- ${monthLabel}`,
+      `Researched with real web search, cross-checked against your existing Insights articles so these aren't duplicates.`,
+      `Note: these are topic/angle recommendations, not keyword-volume data -- that needs a paid SEO tool this site doesn't have.`,
+      ``,
+      ...recommendations.map((r, i) => `${i + 1}. ${r.title}\n   Angle: ${r.angle}\n   Target phrase: ${r.targetPhrase}\n   Why now: ${r.whyNow}\n`)
+    ].join('\n');
+
+    const emailRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: fromAddress, to: [toAddress], subject: `Insights topic recommendations -- ${monthLabel}`, text })
+    });
+
+    if (!emailRes.ok) {
+      return { ok: false, error: 'Email send failed', detail: await emailRes.text() };
+    }
+
+    return { ok: true, monthLabel, count: recommendations.length };
+  } catch (err) {
+    console.log('SEO trends job failed:', String(err));
+    return { ok: false, error: String(err) };
+  }
+}
+
 // Lets Claude itself decide when enough concrete criteria exist to search
 // real inventory, rather than the frontend trying to guess from free text
 // via regex. Anthropic's standard tool-use pattern: Claude may respond with
@@ -1589,6 +1702,19 @@ export default {
       const data = JSON.parse(raw);
       return json(data);
     }
+    if (request.method === 'GET' && url.pathname === '/admin/run/seo-trends') {
+      if (!checkAdminAuth(request, env)) return requireAdminAuth();
+      const result = await runSeoTrendsJob(env);
+      return json(result, result.ok ? 200 : 500);
+    }
+    if (request.method === 'GET' && url.pathname === '/admin/report/seo-trends') {
+      if (!checkAdminAuth(request, env)) return requireAdminAuth();
+      if (!env.REPORTS_KV) return new Response('REPORTS_KV binding is not configured.', { status: 500 });
+      const raw = await env.REPORTS_KV.get('seo-trends-latest');
+      if (!raw) return new Response('No recommendations have run yet — visit /admin/run/seo-trends first.', { status: 404 });
+      const data = JSON.parse(raw);
+      return json(data);
+    }
     if (request.method === 'GET' && url.pathname === '/admin/debug/featured-listings') {
       if (!checkAdminAuth(request, env)) return requireAdminAuth();
       // Bypasses the cache entirely so you can see the actual, current
@@ -1795,6 +1921,8 @@ export default {
       ctx.waitUntil(runSocialPostJob(env));
     } else if (event.cron === '0 13 15 * *') {
       ctx.waitUntil(runCitationMonitorJob(env));
+    } else if (event.cron === '0 13 8 * *') {
+      ctx.waitUntil(runSeoTrendsJob(env));
     }
   }
 };
