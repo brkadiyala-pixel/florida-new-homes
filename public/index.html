@@ -839,7 +839,9 @@ const conciergeLinkMap = [
   [/\bFrenchman's Creek\b/g, 'clubs.html'],
   [/\bprivate clubs\b/gi, 'clubs.html'],
   [/\bnew developments\b/gi, 'new-developments.html'],
-  [/\bnew construction\b/gi, 'new-developments.html']
+  [/\bnew construction\b/gi, 'new-developments.html'],
+  [/\bcondo communities( directory)?\b/gi, 'condo-communities.html'],
+  [/\bcondominium communities\b/gi, 'condo-communities.html']
 ];
 function linkify(text) {
   let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

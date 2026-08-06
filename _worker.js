@@ -1468,7 +1468,7 @@ async function handleConcierge(request, env) {
     const searchedBelowLuxuryRange = Number.isFinite(searchedMaxPrice) && searchedMaxPrice > 0 && searchedMaxPrice < 1000000;
     if (!searchResult.listings.length && searchedBelowLuxuryRange) {
       return json({
-        reply: "Our focus is luxury properties, typically $1M and up, so I don't have a specialist search for that range. You're welcome to browse everything currently listed on our search page directly, or the condo communities directory if you're looking at condos specifically.",
+        reply: "Our focus is luxury properties, typically $1M and up, so I don't have a specialist search for that range. You're welcome to browse our condo communities directory or new developments directly, or search everything currently listed on our search page.",
         listings: [],
         searchParams: toolUseBlock.input || {}
       });
