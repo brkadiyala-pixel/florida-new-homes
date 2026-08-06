@@ -59,7 +59,7 @@
       <a href="about.html" class="hover:text-gold transition">About</a>
       <a href="contact.html" class="hover:text-gold transition">Contact</a>
     </div>
-    <a href="tel:8134000620" class="text-sm text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold hover:text-navy transition">(813) 400-0620</a>
+    <a href="tel:8134000620" class="text-sm text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold hover:text-navy transition flex items-center gap-2"><i class="ti ti-phone text-base"></i>(813) 400-0620</a>
   </div>
 </nav>
 
@@ -300,9 +300,9 @@ function renderIdxCard(raw) {
 
 function idxDisclaimerHtml() {
   return `
-    <div class="col-span-full mt-6 pt-6 border-t border-navy/10 flex flex-col md:flex-row items-start md:items-center gap-4">
-      <img src="images/beachesmls-logo.png" alt="BeachesMLS" class="h-6 w-auto">
-      <p class="text-[11px] text-navy/50 leading-snug max-w-2xl">All listings featuring the BMLS logo are provided by BeachesMLS, Inc. This information is not verified for authenticity or accuracy and is not guaranteed. IDX information is provided exclusively for consumers' personal, non-commercial use and may not be used for any purpose other than to identify prospective properties consumers may be interested in purchasing. Data is deemed reliable but is not guaranteed accurate by BeachesMLS.</p>
+    <div class="col-span-full mt-3 pt-3 border-t border-navy/10 flex flex-col md:flex-row items-start md:items-center gap-3">
+      <img src="images/beachesmls-logo.png" alt="BeachesMLS" class="h-5 w-auto shrink-0">
+      <p class="text-[10px] text-navy/45 leading-snug">All listings featuring the BMLS logo are provided by BeachesMLS, Inc. This information is not verified for authenticity or accuracy and is not guaranteed. IDX information is provided exclusively for consumers' personal, non-commercial use and may not be used for any purpose other than to identify prospective properties consumers may be interested in purchasing. Data is deemed reliable but is not guaranteed accurate by BeachesMLS.</p>
     </div>`;
 }
 
