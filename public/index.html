@@ -862,6 +862,17 @@ async function sendChat() {
   input.value = '';
   log.scrollTop = log.scrollHeight;
 
+  // Deterministic safety net: if the person volunteers a phone number or
+  // email address directly in the chat, that's real contact info that must
+  // not be lost. Detecting it here doesn't depend on the AI remembering to
+  // flag it with [CAPTURE_LEAD] on that exact turn -- the AI can still say
+  // it "has" the number, but only this actually gets it into the real lead
+  // system (emailed to the broker via /api/lead), same as the structured
+  // capture form.
+  const phoneMatch = text.match(/(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+  const emailMatch = text.match(/[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}/);
+  const detectedContactInfo = Boolean(phoneMatch || emailMatch);
+
   // Hide the static starter chips (Waterfront/Golf/etc.) once the
   // conversation actually starts. Leaving them visible caused a real UX
   // problem: once the AI offers its own [SUGGEST] follow-up buttons inside
@@ -920,7 +931,9 @@ async function sendChat() {
         log.insertAdjacentHTML('beforeend', pillsHtml);
         log.scrollTop = log.scrollHeight;
       }
-      if (shouldCapture && !conciergeLeadCaptured) renderInlineCapture(log);
+      if ((shouldCapture || detectedContactInfo) && !conciergeLeadCaptured) {
+        renderInlineCapture(log, phoneMatch ? phoneMatch[0] : '', emailMatch ? emailMatch[0] : '');
+      }
       // Property cards render inside the conversation itself -- not a
       // separate grid the person has to scroll away to find. Compact,
       // capped at 3 (with a link to see the rest), same compliance
@@ -958,14 +971,14 @@ async function sendChat() {
    into the chat log, so a serious prospect doesn't have to leave the
    conversation to be captured. Shown at most once per session. */
 let conciergeLeadCaptured = false;
-function renderInlineCapture(log) {
+function renderInlineCapture(log, prefillPhone, prefillEmail) {
   const id = 'inline-capture-' + Date.now();
   log.insertAdjacentHTML('beforeend', `
     <div id="${id}" class="bg-navy-card border border-gold/30 rounded-md p-3 space-y-2">
       <p class="text-sand/70 text-xs">Share your name and best contact so a specialist can follow up:</p>
       <input id="${id}-name" type="text" placeholder="Full name" class="w-full bg-navy border border-navy-line rounded-full px-3 py-2 text-sand text-sm focus:outline-none focus:border-gold">
-      <input id="${id}-email" type="email" placeholder="Email address" class="w-full bg-navy border border-navy-line rounded-full px-3 py-2 text-sand text-sm focus:outline-none focus:border-gold">
-      <input id="${id}-phone" type="tel" placeholder="Phone (optional)" class="w-full bg-navy border border-navy-line rounded-full px-3 py-2 text-sand text-sm focus:outline-none focus:border-gold">
+      <input id="${id}-email" type="email" placeholder="Email address" value="${prefillEmail || ''}" class="w-full bg-navy border border-navy-line rounded-full px-3 py-2 text-sand text-sm focus:outline-none focus:border-gold">
+      <input id="${id}-phone" type="tel" placeholder="Phone (optional)" value="${prefillPhone || ''}" class="w-full bg-navy border border-navy-line rounded-full px-3 py-2 text-sand text-sm focus:outline-none focus:border-gold">
       <button onclick="submitInlineCapture('${id}')" class="w-full bg-gold text-navy font-medium rounded-full py-2 text-sm hover:bg-gold-light transition">Connect me with a specialist</button>
       <p id="${id}-status" class="text-xs text-sand/40 text-center"></p>
     </div>`);
