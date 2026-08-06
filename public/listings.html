@@ -106,7 +106,7 @@
           <option>Any type</option><option>Waterfront</option><option>Golf community</option><option>Condo</option>
         </select>
       </div>
-      <button onclick="runSearch(1)" class="bg-navy text-sand rounded-sm py-2 text-sm font-medium hover:bg-navy-card transition self-end">Search</button>
+      <button onclick="runManualSearch()" class="bg-navy text-sand rounded-sm py-2 text-sm font-medium hover:bg-navy-card transition self-end">Search</button>
     </div>
   </div>
 </header>
@@ -335,6 +335,24 @@ function setSharedSearchState(partial) {
 let activeSubdivisionFilter = null;
 let activeAddressFilter = null;
 let activeDevelopmentName = null;
+
+// Called by the visible "Search" button specifically (not pagination, and
+// not the initial page-load search). Clears the hidden subdivision/address
+// filter that may have been set by arriving here via a specific
+// community's "Explore" link -- otherwise it stays silently active
+// underneath whatever the person picks in the visible dropdowns, over-
+// constraining their new search in a way nothing on the page shows them.
+// That's exactly what caused a real, confusing "no results" bug: someone
+// lands on one community's listings, changes the region/price/beds
+// dropdowns wanting a broader search, and gets zero results because the
+// original community's address/subdivision filter was still quietly
+// applied on top of their new criteria.
+function runManualSearch() {
+  activeSubdivisionFilter = null;
+  activeAddressFilter = null;
+  activeDevelopmentName = null;
+  runSearch(1);
+}
 
 function buildParams(page) {
   const region = document.getElementById('f-region').value;
