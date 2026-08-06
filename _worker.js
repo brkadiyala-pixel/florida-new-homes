@@ -270,7 +270,7 @@ const RESO_SELECT_FIELDS = [
   'AssociationFee', 'AssociationFeeFrequency'
 ].join(',');
 
-function buildResoFilter({ city, minPrice, maxPrice, beds, propertyType, subdivision }) {
+function buildResoFilter({ city, minPrice, maxPrice, beds, propertyType, subdivision, address }) {
   const filters = [`StandardStatus eq 'Active'`];
   if (city) filters.push(`City eq '${city.replace(/'/g, "''")}'`);
   if (minPrice) filters.push(`ListPrice ge ${Number(minPrice)}`);
@@ -291,30 +291,34 @@ function buildResoFilter({ city, minPrice, maxPrice, beds, propertyType, subdivi
       .join(' or ');
     filters.push(`(${golfFilter})`);
   }
-  // Exact-match subdivision filter, used by the new-developments page CTAs to
-  // link straight to that specific development's real active inventory.
-  // Supports multiple pipe-separated values (e.g. a development whose
-  // listings might be tagged under either of two legal plat names) --
-  // exact match rather than contains() since these come from real,
-  // human-verified MLS subdivision values, not a guessed keyword.
+  // Community-identification filter, used by both the New Developments page
+  // (exact-verified subdivision names) and the Condo Communities directory
+  // (a mix of exact-verified and best-effort researched data). subdivision
+  // supports multiple pipe-separated values (alternate legal/MLS names for
+  // the same building) matched with exact equality -- NOT tolower(),
+  // confirmed via live testing that Spark's OData implementation doesn't
+  // actually support that function and fails silently instead of erroring.
+  // address is matched with contains() against the street address.
   //
-  // IMPORTANT: plain exact match, NOT tolower(). Confirmed via live testing
-  // against BeachesMLS/Spark that tolower(SubdivisionName) eq '...' silently
-  // returns zero results for every value tested -- Spark's OData
-  // implementation doesn't actually support the tolower() function the way
-  // the OData v4 spec defines it, and it fails silently (no error) rather
-  // than rejecting the query. An earlier "case-insensitive" fix here was
-  // itself the bug, hiding real, active listings across every single
-  // development on the New Developments page. Since every subdivision value
-  // now comes from direct, human-verified MLS lookups (not a guess), exact
-  // case match is both correct and necessary.
+  // IMPORTANT: when BOTH address and subdivision are given together, they
+  // are OR'd, not AND'd. They're alternate ways of identifying the SAME
+  // community, not independent constraints that must both be true --
+  // requiring both to match would make an imperfect guess on either one
+  // silently zero out real results, exactly the kind of bug this site hit
+  // repeatedly before. Giving multiple ways to match increases the chance
+  // of a genuine result without ever fabricating false precision -- if
+  // nothing matches, the honest "no active listings" state still shows.
+  const communityFilters = [];
   if (subdivision) {
     const names = subdivision.split('|').map(s => s.trim()).filter(Boolean);
-    const subFilter = names
-      .map(name => `SubdivisionName eq '${name.replace(/'/g, "''")}'`)
-      .join(' or ');
-    if (subFilter) filters.push(`(${subFilter})`);
+    for (const name of names) {
+      communityFilters.push(`SubdivisionName eq '${name.replace(/'/g, "''")}'`);
+    }
   }
+  if (address) {
+    communityFilters.push(`contains(UnparsedAddress,'${address.replace(/'/g, "''")}')`);
+  }
+  if (communityFilters.length) filters.push(`(${communityFilters.join(' or ')})`);
   return filters.join(' and ');
 }
 
@@ -398,13 +402,14 @@ async function handleListings(request, env) {
   const beds = url.searchParams.get('beds');
   const propertyType = url.searchParams.get('propertyType');
   const subdivision = url.searchParams.get('subdivision');
+  const address = url.searchParams.get('address');
   const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
   const pageSize = Math.min(50, Number(url.searchParams.get('pageSize')) || 12);
 
   try {
     const result = await queryResoWithCache(
       env,
-      { city, minPrice, maxPrice, beds, propertyType, subdivision },
+      { city, minPrice, maxPrice, beds, propertyType, subdivision, address },
       pageSize,
       (page - 1) * pageSize
     );
