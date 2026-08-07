@@ -1504,6 +1504,25 @@ const SEARCH_LISTINGS_TOOL = {
   }
 };
 
+// Deterministic safety net: budget questions are probably the single most
+// common branch point in this concierge, and the system prompt's "hard
+// rule" about always including a [SUGGEST] marker for bounded option lists
+// doesn't apply with full reliability every time -- confirmed by a real
+// conversation where the AI asked "$2-5M range, $5-10M, or something else"
+// as plain text with no buttons. Rather than just rewording the prompt
+// again (it already had a near-identical example and still didn't apply
+// here), detect this specific, high-frequency case in code and inject the
+// buttons directly if the AI's own reply asked a budget/price question but
+// forgot the marker.
+function ensureBudgetSuggestButtons(reply) {
+  const asksAboutBudget = /\b(budget|price range)\b/i.test(reply) && reply.includes('?');
+  const alreadyHasSuggest = /\[SUGGEST:/i.test(reply);
+  if (asksAboutBudget && !alreadyHasSuggest) {
+    return reply + '\n[SUGGEST: $1M - $2M | $2M - $5M | $5M - $10M | $10M+]';
+  }
+  return reply;
+}
+
 async function handleConcierge(request, env) {
   if (!env.ANTHROPIC_API_KEY) {
     return json({ error: 'Concierge is not configured yet (missing ANTHROPIC_API_KEY).' }, 500);
@@ -1591,11 +1610,12 @@ async function handleConcierge(request, env) {
 
     // No tool call -- plain conversational reply, same as before.
     if (!toolUseBlock) {
-      const reply = (firstData.content || [])
+      let reply = (firstData.content || [])
         .map(block => (block.type === 'text' ? block.text : ''))
         .filter(Boolean)
         .join('\n')
         .trim() || "I'll connect you with a specialist who can help with that.";
+      reply = ensureBudgetSuggestButtons(reply);
       return json({ reply, listings: [] });
     }
 
@@ -1689,13 +1709,14 @@ async function handleConcierge(request, env) {
     }
 
     const secondData = await secondRes.json();
-    const reply = (secondData.content || [])
+    let reply = (secondData.content || [])
       .map(block => (block.type === 'text' ? block.text : ''))
       .filter(Boolean)
       .join('\n')
       .trim() || (summaryForClaude.length
         ? `I found ${summaryForClaude.length} current listing${summaryForClaude.length === 1 ? '' : 's'} that match.`
         : "I don't see an exact match in current inventory, but a specialist can help with off-market options.");
+    reply = ensureBudgetSuggestButtons(reply);
 
     return json({ reply, listings: searchResult.listings || [], searchParams: toolUseBlock.input || {} });
   } catch (err) {
