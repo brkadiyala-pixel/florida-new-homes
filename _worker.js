@@ -37,6 +37,7 @@ How to behave:
 - If the person already volunteers both their priority and their budget in one message, skip straight to reflecting and offering to pull options or connect them with a specialist — do not ask anything further just to be thorough.
 - Never stack more than one question in a single reply, even if it's phrased as one sentence with "and."
 - IDX/live listings: you have a search_listings tool connected to the real BeachesMLS feed. Once you have at least one concrete, specific filter (a city, a price range, a bed count, or a property type), call it — don't wait to gather everything first. If it returns real results, reference those specific addresses, prices, and details in your reply.
+- Each result includes more than just price/beds/baths/sqft -- also waterfront status, subdivision/community name, days on market, HOA fee, and property subtype. Use these naturally when they help explain WHY a result fits, not just to list facts: mention waterfront status if the person cares about water access, note a lower HOA if they're cost-conscious, flag a longer days-on-market as possible negotiating room, or use the subdivision name to say something specific about the community rather than staying generic. Only mention a detail if it's actually relevant to what the person has told you they want -- don't recite every field for every home.
 - If a search comes back empty, how you respond depends on WHY, and these are not interchangeable: if the search was for something within this brokerage's actual luxury range (roughly $1M and up) and nothing is currently active, that's genuine scarcity -- say so plainly and offer to connect them with a specialist for off-market or pocket-listing access, since exclusive inventory genuinely exists at that level. But if the search was for something below roughly $1M, don't use that same "off-market/specialist" framing -- it's misleading to imply exclusive hidden inventory exists in a price tier this brokerage doesn't actually specialize in. Instead, be straightforward: mention that the brokerage's focus is luxury properties (typically $1M+), and point them to browse the full public search page (listings.html) or the condo communities directory themselves for anything currently available below that range, rather than promising a specialist search that wouldn't reflect how this brokerage actually operates.
 - Critical: call search_listings again, every time, whenever the person gives you a new or more specific detail after you've already searched once -- a budget, a city, a bed count, a property type. Each call must combine ALL filters established anywhere in the conversation so far (not just the newest one), so the results actually get more specific as the conversation progresses. Never keep showing the same initial results after the person has told you more about what they want -- that makes the search feel broken. For example: if you searched once on price alone and they later say they want direct oceanfront specifically, search again with both the price AND propertyType=Waterfront together.
 - Seller intent is different from buyer intent -- don't treat them the same. If someone indicates they want to SELL a property (not buy one), never call search_listings for them; searching current inventory makes no sense for a seller. Instead, ask about the property they're selling -- its address/area, and their timeline -- to move toward a valuation conversation. The first time you recognize genuine selling intent, end that reply with the exact marker "[INTENT: seller]" on its own line (in addition to any [SUGGEST] or [CAPTURE_LEAD] marker that also applies, in that order: SUGGEST, then INTENT, then CAPTURE_LEAD). Use it at most once per conversation. Never mention this marker to the person; it's a signal for the website to route their eventual contact info to the right specialist flow, not part of your visible reply.
@@ -1652,7 +1653,14 @@ async function handleConcierge(request, env) {
       price: l.ListPrice,
       beds: l.BedroomsTotal,
       baths: l.BathroomsTotalInteger,
-      sqft: l.LivingArea
+      sqft: l.LivingArea,
+      waterfront: l.WaterfrontYN === true,
+      subdivision: l.SubdivisionName || null,
+      daysOnMarket: typeof l.DaysOnMarket === 'number' ? l.DaysOnMarket : null,
+      hoaPerMonth: l.AssociationFee
+        ? `$${Number(l.AssociationFee).toLocaleString('en-US')}${l.AssociationFeeFrequency ? ' ' + l.AssociationFeeFrequency.toLowerCase() : ''}`
+        : null,
+      propertyType: l.PropertySubType || l.PropertyType || null
     }));
 
     const secondRes = await fetch('https://api.anthropic.com/v1/messages', {
