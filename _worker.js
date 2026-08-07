@@ -1381,7 +1381,7 @@ Recommend 5 NEW article topics that don't duplicate those. For each, give:
 - A working title
 - The core angle in one sentence
 - A target search phrase a real buyer might use (not a guessed keyword-volume number -- just the phrase itself)
-- One sentence on why it's timely right now, describing what you found in plain prose
+- One sentence on why it's timely right now, describing what you found in plain prose -- genuinely one sentence, under 40 words, not a dense paragraph of stacked facts
 
 Critical formatting rule: respond with ONLY a raw JSON array, nothing else -- no markdown fences, no explanatory text before or after, and no citation tags or markup of any kind (no <cite> tags, no bracketed source markers) inside any string value. Every fact must be woven into plain, ordinary sentences instead -- citation markup breaks JSON syntax when it ends up inside a string value, which otherwise silently corrupts the entire response.
 
@@ -1404,7 +1404,7 @@ async function runSeoTrendsJob(env) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 2048,
+        max_tokens: 6000,
         system: SEO_TRENDS_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: 'Research current luxury real estate trends and recommend 5 new Insights article topics for this month.' }],
         tools: [{ type: 'web_search_20250305', name: 'web_search' }]
@@ -1419,6 +1419,15 @@ async function runSeoTrendsJob(env) {
 
     const data = await res.json();
     const raw = (data.content || []).map(b => (b.type === 'text' ? b.text : '')).join('').trim();
+
+    // Surface stop_reason directly -- if this is ever "max_tokens" again,
+    // that's an immediate, certain diagnosis (the response was cut off
+    // before finishing) instead of having to infer it from where the raw
+    // text happens to stop.
+    if (data.stop_reason === 'max_tokens') {
+      console.log('SEO trends job: response was truncated (max_tokens hit) before completing');
+      return { ok: false, error: 'Response was truncated before completing (hit max_tokens) -- raise the limit further', stopReason: data.stop_reason, raw };
+    }
 
     // Defensive safety net, not just a prompt instruction: the web search
     // tool can add <cite index="..."> tags into the model's output by
@@ -1437,7 +1446,7 @@ async function runSeoTrendsJob(env) {
       recommendations = JSON.parse(cleaned);
     } catch {
       console.log('SEO trends job: could not parse AI response:', raw);
-      return { ok: false, error: 'Could not parse AI response', raw };
+      return { ok: false, error: 'Could not parse AI response', stopReason: data.stop_reason, raw };
     }
 
     const monthLabel = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'America/New_York' });
