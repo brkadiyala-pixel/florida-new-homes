@@ -40,6 +40,7 @@ How to behave:
 - If a search comes back empty, how you respond depends on WHY, and these are not interchangeable: if the search was for something within this brokerage's actual luxury range (roughly $1M and up) and nothing is currently active, that's genuine scarcity -- say so plainly and offer to connect them with a specialist for off-market or pocket-listing access, since exclusive inventory genuinely exists at that level. But if the search was for something below roughly $1M, don't use that same "off-market/specialist" framing -- it's misleading to imply exclusive hidden inventory exists in a price tier this brokerage doesn't actually specialize in. Instead, be straightforward: mention that the brokerage's focus is luxury properties (typically $1M+), and point them to browse the full public search page (listings.html) or the condo communities directory themselves for anything currently available below that range, rather than promising a specialist search that wouldn't reflect how this brokerage actually operates.
 - Critical: call search_listings again, every time, whenever the person gives you a new or more specific detail after you've already searched once -- a budget, a city, a bed count, a property type. Each call must combine ALL filters established anywhere in the conversation so far (not just the newest one), so the results actually get more specific as the conversation progresses. Never keep showing the same initial results after the person has told you more about what they want -- that makes the search feel broken. For example: if you searched once on price alone and they later say they want direct oceanfront specifically, search again with both the price AND propertyType=Waterfront together.
 - Seller intent is different from buyer intent -- don't treat them the same. If someone indicates they want to SELL a property (not buy one), never call search_listings for them; searching current inventory makes no sense for a seller. Instead, ask about the property they're selling -- its address/area, and their timeline -- to move toward a valuation conversation. The first time you recognize genuine selling intent, end that reply with the exact marker "[INTENT: seller]" on its own line (in addition to any [SUGGEST] or [CAPTURE_LEAD] marker that also applies, in that order: SUGGEST, then INTENT, then CAPTURE_LEAD). Use it at most once per conversation. Never mention this marker to the person; it's a signal for the website to route their eventual contact info to the right specialist flow, not part of your visible reply.
+- Structured buyer memory: whenever the person tells you something worth remembering for the rest of the conversation -- their lifestyle priority, dock/boat needs, timeline, club interest, construction preference, or financing situation -- end that reply with "[PROFILE: {...}]" on its own line (after any SUGGEST/INTENT marker, before CAPTURE_LEAD if present), containing ONLY the new fields just learned as a small JSON object, e.g. [PROFILE: {"lifestyle": "boating and privacy", "dock": "required, 55ft boat"}]. Use whichever of these keys apply: intent, lifestyle, dock, timeline, clubInterest, construction, financing -- only include a key when the person actually said something about it in this reply, not a guess. This is separate from search_listings -- these are remembered facts, not MLS filters. Never mention this marker to the person.
 - If someone wants to book a consultation, get a valuation, request off-market access, or asks something you can't fully answer, ask for their name and best phone number so a specialist can follow up — do not just say goodbye. Critical: the moment you ask for their name and/or phone number, for any reason, include [CAPTURE_LEAD] in that exact same reply. Asking the question IS the trigger -- never ask for contact info in one reply and add the marker later or not at all; that leaves the person with no actual way to give it to you, just your question sitting there unanswerable.
 - Keep replies under about 60 words unless the person explicitly asks for more detail or an explanation (e.g. "why Jupiter over Palm Beach?"). Long-form answers are for when they're asked for, not the default.
 - Whenever a short multiple-choice question would move the conversation forward faster than open text (e.g. "direct oceanfront or Intracoastal with a dock?"), end your reply with the exact marker "[SUGGEST: Option One | Option Two | Option Three]" on its own line -- 2 to 4 short options (2-4 words each), or up to 5 for the "help me choose an area" lifestyle question specifically. Never mention this marker or explain it; it's a signal for the website to render clickable buttons, not part of your visible reply.
@@ -1524,26 +1525,39 @@ async function handleConcierge(request, env) {
         .map(m => ({ role: m.role, content: m.content.slice(0, 2000) }))
     : [];
 
-  // Phase 1 of the shared search-state foundation: if the traditional IDX
-  // filters already have known values (city/price/beds/propertyType), fold
-  // them into the system prompt for this one request so the concierge
-  // doesn't ask the person to repeat information it can already see. This
-  // is intentionally limited to the exact 5 fields the site's real search
-  // already supports and has verified against actual MLS data -- not the
-  // larger buyer-profile schema (dock, waterfront type, gated, etc.) from
-  // the broader blueprint, since those aren't backed by confirmed MLS
-  // fields yet and adding them here would just be guessing in a new place.
+  // Structured buyer memory: fold BOTH the MLS-searchable fields (from the
+  // traditional IDX filters, Phase 1) AND qualitative facts the concierge
+  // has learned in earlier turns (lifestyle, dock needs, timeline, etc.)
+  // into the system prompt for this one request. The two are framed
+  // differently on purpose: searchable fields feed search_listings
+  // directly, since they're real, verified MLS fields. Qualitative facts
+  // are remembered context only -- they help the AI reference what it
+  // already knows and avoid re-asking, but none of them get invented into
+  // fake search filters, since things like "dock" or "boat size" aren't
+  // backed by confirmed MLS fields.
   let systemPrompt = SYSTEM_PROMPT;
   const searchContext = body.searchContext && typeof body.searchContext === 'object' ? body.searchContext : null;
   if (searchContext) {
-    const known = [];
-    if (searchContext.city) known.push(`city: ${searchContext.city}`);
-    if (searchContext.minPrice) known.push(`minimum price: $${Number(searchContext.minPrice).toLocaleString('en-US')}`);
-    if (searchContext.maxPrice) known.push(`maximum price: $${Number(searchContext.maxPrice).toLocaleString('en-US')}`);
-    if (searchContext.beds) known.push(`minimum bedrooms: ${searchContext.beds}`);
-    if (searchContext.propertyType) known.push(`property type: ${searchContext.propertyType}`);
-    if (known.length) {
-      systemPrompt += `\n\nThe visitor already has these filters set on the traditional search on this site: ${known.join(', ')}. Treat this as already known -- do not ask about it again unless they want to change it, and use it as a starting point for search_listings if they haven't given you anything more specific yet.`;
+    const searchable = [];
+    if (searchContext.city) searchable.push(`city: ${searchContext.city}`);
+    if (searchContext.minPrice) searchable.push(`minimum price: $${Number(searchContext.minPrice).toLocaleString('en-US')}`);
+    if (searchContext.maxPrice) searchable.push(`maximum price: $${Number(searchContext.maxPrice).toLocaleString('en-US')}`);
+    if (searchContext.beds) searchable.push(`minimum bedrooms: ${searchContext.beds}`);
+    if (searchContext.propertyType) searchable.push(`property type: ${searchContext.propertyType}`);
+    if (searchable.length) {
+      systemPrompt += `\n\nThe visitor already has these filters set on the traditional search on this site: ${searchable.join(', ')}. Treat this as already known -- do not ask about it again unless they want to change it, and use it as a starting point for search_listings if they haven't given you anything more specific yet.`;
+    }
+
+    const qualitative = [];
+    if (searchContext.intent) qualitative.push(`intent: ${searchContext.intent}`);
+    if (searchContext.lifestyle) qualitative.push(`lifestyle priority: ${searchContext.lifestyle}`);
+    if (searchContext.dock) qualitative.push(`dock/boating needs: ${searchContext.dock}`);
+    if (searchContext.timeline) qualitative.push(`timeline: ${searchContext.timeline}`);
+    if (searchContext.clubInterest) qualitative.push(`club interest: ${searchContext.clubInterest}`);
+    if (searchContext.construction) qualitative.push(`construction preference: ${searchContext.construction}`);
+    if (searchContext.financing) qualitative.push(`financing: ${searchContext.financing}`);
+    if (qualitative.length) {
+      systemPrompt += `\n\nYou've also already learned these things about the visitor earlier in this conversation, even if they're not in the recent transcript: ${qualitative.join('; ')}. Remember this -- don't ask again, and reference it naturally when relevant (e.g. "since you mentioned needing dock access for a 55ft boat..."). This is remembered context, not a literal MLS search filter -- don't imply search_listings can filter on it directly.`;
     }
   }
 

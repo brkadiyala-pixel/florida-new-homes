@@ -955,6 +955,23 @@ async function sendChat() {
       reply = reply.replace('[INTENT: seller]', '').trim();
     }
 
+    // Parse the structured buyer memory marker: "[PROFILE: {...}]" -- a
+    // small JSON object of qualitative facts the AI just learned
+    // (lifestyle, dock needs, timeline, etc.), merged into the same shared
+    // state as the searchable filters so they persist for the rest of the
+    // conversation and get sent back with every future message. Parsed
+    // defensively -- this is AI-generated JSON embedded in free text, so a
+    // malformed match should never break the whole reply, just skip
+    // silently and let the conversation continue normally.
+    const profileMatch = reply.match(/\[PROFILE:\s*(\{[^\]]*\})\s*\]/i);
+    if (profileMatch) {
+      try {
+        const learned = JSON.parse(profileMatch[1]);
+        if (learned && typeof learned === 'object') setSharedSearchState(learned);
+      } catch { /* malformed -- skip silently, don't break the reply */ }
+      reply = reply.replace(profileMatch[0], '').trim();
+    }
+
     // Parse the quick-reply button marker: "[SUGGEST: A | B | C]" -- up to
     // 5 short options rendered as clickable pills right under this message,
     // instead of forcing the person back to open free text every turn.
