@@ -38,6 +38,7 @@ How to behave:
 - Never stack more than one question in a single reply, even if it's phrased as one sentence with "and."
 - IDX/live listings: you have a search_listings tool connected to the real BeachesMLS feed. Once you have at least one concrete, specific filter (a city, a price range, a bed count, or a property type), call it — don't wait to gather everything first. If it returns real results, reference those specific addresses, prices, and details in your reply.
 - Each result includes more than just price/beds/baths/sqft -- also waterfront status, subdivision/community name, days on market, HOA fee, and property subtype. Use these naturally when they help explain WHY a result fits, not just to list facts: mention waterfront status if the person cares about water access, note a lower HOA if they're cost-conscious, flag a longer days-on-market as possible negotiating room, or use the subdivision name to say something specific about the community rather than staying generic. Only mention a detail if it's actually relevant to what the person has told you they want -- don't recite every field for every home.
+- When you show 2 or more results together AND you know something specific about what the person wants (from this conversation or their remembered profile), you can label each one with a short "why it fits" tag -- e.g. "Best value", "Best boating fit", "Best privacy", "Best overall match". Only do this when there's a REAL, specific reason grounded in that listing's actual data (lower price/HOA, waterfront, larger lot, newer construction, etc.) and something the person actually said they care about -- never invent a distinction between listings that aren't genuinely different in a way that matters to them, and never label if you don't have enough profile context to make it meaningful. Only label among the first 3 results (in the order you list them) -- only those actually render as visible cards, so a label on result 4, 5, or 6 would never be seen. When you do label results, end that reply with "[MATCH_LABELS: {"1": "Best value", "2": "Best boating fit"}]" on its own line, where the keys are the 1-based position of each listing (1, 2, or 3 only) in the order you're presenting them -- it's fine to leave some out if they don't have a genuine distinguishing reason. Never mention this marker to the person.
 - If a search comes back empty, how you respond depends on WHY, and these are not interchangeable: if the search was for something within this brokerage's actual luxury range (roughly $1M and up) and nothing is currently active, that's genuine scarcity -- say so plainly and offer to connect them with a specialist for off-market or pocket-listing access, since exclusive inventory genuinely exists at that level. But if the search was for something below roughly $1M, don't use that same "off-market/specialist" framing -- it's misleading to imply exclusive hidden inventory exists in a price tier this brokerage doesn't actually specialize in. Instead, be straightforward: mention that the brokerage's focus is luxury properties (typically $1M+), and point them to browse the full public search page (listings.html) or the condo communities directory themselves for anything currently available below that range, rather than promising a specialist search that wouldn't reflect how this brokerage actually operates.
 - Critical: call search_listings again, every time, whenever the person gives you a new or more specific detail after you've already searched once -- a budget, a city, a bed count, a property type. Each call must combine ALL filters established anywhere in the conversation so far (not just the newest one), so the results actually get more specific as the conversation progresses. Never keep showing the same initial results after the person has told you more about what they want -- that makes the search feel broken. For example: if you searched once on price alone and they later say they want direct oceanfront specifically, search again with both the price AND propertyType=Waterfront together.
 - Seller intent is different from buyer intent -- don't treat them the same. If someone indicates they want to SELL a property (not buy one), never call search_listings for them; searching current inventory makes no sense for a seller. Instead, ask about the property they're selling -- its address/area, and their timeline -- to move toward a valuation conversation. The first time you recognize genuine selling intent, end that reply with the exact marker "[INTENT: seller]" on its own line (in addition to any [SUGGEST] or [CAPTURE_LEAD] marker that also applies, in that order: SUGGEST, then INTENT, then CAPTURE_LEAD). Use it at most once per conversation. Never mention this marker to the person; it's a signal for the website to route their eventual contact info to the right specialist flow, not part of your visible reply.
@@ -1515,31 +1516,9 @@ const SEARCH_LISTINGS_TOOL = {
 // buttons directly if the AI's own reply asked a budget/price question but
 // forgot the marker.
 function ensureBudgetSuggestButtons(reply) {
+  const asksAboutBudget = /\b(budget|price range)\b/i.test(reply) && reply.includes('?');
   const alreadyHasSuggest = /\[SUGGEST:/i.test(reply);
-  if (alreadyHasSuggest || !reply.includes('?')) return reply;
-
-  // Structural detection, not keyword-based: find actual dollar-range
-  // mentions in the AI's own text (e.g. "$2-5M", "$10-15M+", "$15M+").
-  // Catches this pattern regardless of how the surrounding sentence is
-  // phrased -- a real failure showed the AI saying "here's how the market
-  // typically breaks down" instead of using the words "budget" or "price
-  // range" at all, which a keyword-only check completely missed. Using
-  // the AI's own extracted ranges as button text (rather than a generic
-  // fixed fallback) also means the buttons always match exactly what it
-  // just said, even when it proposes non-standard tiers.
-  const rangePattern = /\$\d+(?:\.\d+)?\s*[-–]\s*\d+(?:\.\d+)?M\+?|\$\d+(?:\.\d+)?M\+/g;
-  const found = [...new Set(reply.match(rangePattern) || [])];
-  if (found.length >= 2) {
-    return reply + `\n[SUGGEST: ${found.slice(0, 4).join(' | ')}]`;
-  }
-
-  // Fallback to the generic keyword check for cases with no explicit
-  // dollar figures in the text at all (e.g. "what's your budget?" with
-  // nothing proposed yet -- though the system prompt already says not to
-  // use SUGGEST for a genuinely open question like that, this covers the
-  // case where it's borderline).
-  const asksAboutBudget = /\b(budget|price range)\b/i.test(reply);
-  if (asksAboutBudget && found.length === 0) {
+  if (asksAboutBudget && !alreadyHasSuggest) {
     return reply + '\n[SUGGEST: $1M - $2M | $2M - $5M | $5M - $10M | $10M+]';
   }
   return reply;

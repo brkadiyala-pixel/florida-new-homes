@@ -989,6 +989,21 @@ async function sendChat() {
       reply = reply.replace(suggestMatch[0], '').trim();
     }
 
+    // Parse the "why it matches" label marker: "[MATCH_LABELS: {"1": "Best
+    // value", ...}]" -- a small JSON object keying the 1-based position of
+    // each result (only 1-3, since that's all that renders as cards) to a
+    // short reason tag. Parsed defensively, same as PROFILE -- malformed
+    // AI-generated JSON should skip silently, never break the reply.
+    let matchLabels = {};
+    const labelsMatch = reply.match(/\[MATCH_LABELS:\s*(\{[^\]]*\})\s*\]/i);
+    if (labelsMatch) {
+      try {
+        const parsed = JSON.parse(labelsMatch[1]);
+        if (parsed && typeof parsed === 'object') matchLabels = parsed;
+      } catch { /* malformed -- skip silently, cards just render without badges */ }
+      reply = reply.replace(labelsMatch[0], '').trim();
+    }
+
     const replyId = 'reply-' + Date.now();
     log.insertAdjacentHTML('beforeend', `<div id="${replyId}" class="bg-navy-card rounded-md p-3 text-sand/90 text-sm"></div>`);
     typewrite(document.getElementById(replyId), reply, log, () => {
@@ -1006,9 +1021,20 @@ async function sendChat() {
       // separate grid the person has to scroll away to find. Compact,
       // capped at 3 (with a link to see the rest), same compliance
       // elements (courtesy line, MLS#, View Details) as everywhere else.
+      // A "why it matches" badge is added above any card the AI actually
+      // gave a genuine, grounded reason for -- built as a wrapper around
+      // the shared renderIdxCard() output rather than changing that
+      // function itself, since it's also used on pages with no buyer
+      // context to reason from.
       if (data.listings && data.listings.length) {
         const shown = data.listings.slice(0, 3);
-        const cardsHtml = `<div class="grid grid-cols-1 gap-3 mt-1">${shown.map(renderIdxCard).join('')}</div>` +
+        const cardsHtml = `<div class="grid grid-cols-1 gap-3 mt-1">${shown.map((listing, i) => {
+          const label = matchLabels[String(i + 1)];
+          const badge = label
+            ? `<p class="text-[11px] uppercase tracking-wide text-gold-dim font-medium mb-1 pl-1">${label}</p>`
+            : '';
+          return badge + renderIdxCard(listing);
+        }).join('')}</div>` +
           (data.listings.length > 3
             ? `<a href="/listings.html" class="block text-center text-sand/70 text-xs mt-2 hover:text-gold transition">View all ${data.listings.length} homes →</a>`
             : '');
