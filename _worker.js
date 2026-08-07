@@ -1381,9 +1381,11 @@ Recommend 5 NEW article topics that don't duplicate those. For each, give:
 - A working title
 - The core angle in one sentence
 - A target search phrase a real buyer might use (not a guessed keyword-volume number -- just the phrase itself)
-- One sentence on why it's timely right now, citing what you found
+- One sentence on why it's timely right now, describing what you found in plain prose
 
-Respond ONLY with a JSON array, no other text, no markdown fences:
+Critical formatting rule: respond with ONLY a raw JSON array, nothing else -- no markdown fences, no explanatory text before or after, and no citation tags or markup of any kind (no <cite> tags, no bracketed source markers) inside any string value. Every fact must be woven into plain, ordinary sentences instead -- citation markup breaks JSON syntax when it ends up inside a string value, which otherwise silently corrupts the entire response.
+
+Format exactly like this:
 [{"title": "...", "angle": "...", "targetPhrase": "...", "whyNow": "..."}]`;
 
 async function runSeoTrendsJob(env) {
@@ -1418,9 +1420,21 @@ async function runSeoTrendsJob(env) {
     const data = await res.json();
     const raw = (data.content || []).map(b => (b.type === 'text' ? b.text : '')).join('').trim();
 
+    // Defensive safety net, not just a prompt instruction: the web search
+    // tool can add <cite index="..."> tags into the model's output by
+    // default, which breaks JSON syntax when they land inside a string
+    // value (exactly what happened in production -- valid-looking JSON
+    // that failed to parse because of embedded citation markup). Strip any
+    // citation tags before attempting to parse, regardless of whether the
+    // prompt instruction was followed.
+    const cleaned = raw
+      .replace(/<cite[^>]*>/gi, '')
+      .replace(/<\/cite>/gi, '')
+      .replace(/^```json\s*|\s*```$/g, '');
+
     let recommendations;
     try {
-      recommendations = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ''));
+      recommendations = JSON.parse(cleaned);
     } catch {
       console.log('SEO trends job: could not parse AI response:', raw);
       return { ok: false, error: 'Could not parse AI response', raw };
