@@ -199,7 +199,7 @@ async function submitContact() {
     message
   };
   const status = document.getElementById('contact-status');
-  if (!lead.name || !lead.email) { status.textContent = 'Please enter your name and email.'; return; }
+  if (!lead.name || (!lead.email && !lead.phone)) { status.textContent = 'Please enter your name and a phone number or email.'; return; }
   status.textContent = 'Sending...';
   try {
     const res = await fetch('/api/lead', {

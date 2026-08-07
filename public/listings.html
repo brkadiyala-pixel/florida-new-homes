@@ -130,7 +130,7 @@
       <p class="text-sm text-navy/60 mb-5">Tell us a bit about you and a Florida luxury specialist will follow up.</p>
       <div class="space-y-3">
         <input id="lead-name" type="text" placeholder="Full name" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
-        <input id="lead-email" type="email" placeholder="Email address" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
+        <input id="lead-email" type="email" placeholder="Email address (optional)" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
         <input id="lead-phone" type="tel" placeholder="Phone number" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
         <p class="text-xs text-navy/40 leading-snug">By submitting, you consent to be contacted by Bharath Kadiyala / Dalton Wade Real Estate Group by phone, text, and email regarding your real estate inquiry, including by automated means. Consent is not a condition of purchase. See our <a href="legal/privacy-policy.html" class="underline hover:text-gold-dim" target="_blank">Privacy Policy</a>.</p>
         <button onclick="submitLead()" class="w-full bg-navy text-sand py-3 rounded-sm text-sm font-medium hover:bg-navy-card transition">Submit</button>
@@ -475,7 +475,7 @@ async function submitLead() {
   const phone = document.getElementById('lead-phone').value;
   const lead = { name, email, phone, source: 'listings-page', site: 'luxuryredefined.homes', message: leadContextMessage };
   const status = document.getElementById('lead-status');
-  if (!lead.name || !lead.email) { status.textContent = 'Please enter your name and email.'; return; }
+  if (!lead.name || (!lead.email && !lead.phone)) { status.textContent = 'Please enter your name and a phone number or email.'; return; }
   status.textContent = 'Submitting...';
   try {
     const res = await fetch('/api/lead', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead) });

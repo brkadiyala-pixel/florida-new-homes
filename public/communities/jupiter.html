@@ -149,7 +149,7 @@
     <p class="text-sm text-navy/60 mb-5">Tell us a bit about you and a Palm Beach luxury specialist will follow up.</p>
     <div class="space-y-3">
       <input id="lead-name" type="text" placeholder="Full name" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
-      <input id="lead-email" type="email" placeholder="Email address" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
+      <input id="lead-email" type="email" placeholder="Email address (optional)" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
       <input id="lead-phone" type="tel" placeholder="Phone number" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
       <button onclick="submitLead()" class="w-full bg-navy text-sand py-3 rounded-sm text-sm font-medium hover:bg-navy-card transition">Submit</button>
       <p id="lead-status" class="text-xs text-navy/50 text-center"></p>
@@ -171,7 +171,7 @@ async function submitLead() {
     site: 'luxuryredefined.homes'
   };
   const status = document.getElementById('lead-status');
-  if (!lead.name || !lead.email) { status.textContent = 'Please enter your name and email.'; return; }
+  if (!lead.name || (!lead.email && !lead.phone)) { status.textContent = 'Please enter your name and a phone number or email.'; return; }
   status.textContent = 'Submitting...';
   try {
     const res = await fetch('/api/lead', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(lead) });
