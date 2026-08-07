@@ -1515,9 +1515,31 @@ const SEARCH_LISTINGS_TOOL = {
 // buttons directly if the AI's own reply asked a budget/price question but
 // forgot the marker.
 function ensureBudgetSuggestButtons(reply) {
-  const asksAboutBudget = /\b(budget|price range)\b/i.test(reply) && reply.includes('?');
   const alreadyHasSuggest = /\[SUGGEST:/i.test(reply);
-  if (asksAboutBudget && !alreadyHasSuggest) {
+  if (alreadyHasSuggest || !reply.includes('?')) return reply;
+
+  // Structural detection, not keyword-based: find actual dollar-range
+  // mentions in the AI's own text (e.g. "$2-5M", "$10-15M+", "$15M+").
+  // Catches this pattern regardless of how the surrounding sentence is
+  // phrased -- a real failure showed the AI saying "here's how the market
+  // typically breaks down" instead of using the words "budget" or "price
+  // range" at all, which a keyword-only check completely missed. Using
+  // the AI's own extracted ranges as button text (rather than a generic
+  // fixed fallback) also means the buttons always match exactly what it
+  // just said, even when it proposes non-standard tiers.
+  const rangePattern = /\$\d+(?:\.\d+)?\s*[-–]\s*\d+(?:\.\d+)?M\+?|\$\d+(?:\.\d+)?M\+/g;
+  const found = [...new Set(reply.match(rangePattern) || [])];
+  if (found.length >= 2) {
+    return reply + `\n[SUGGEST: ${found.slice(0, 4).join(' | ')}]`;
+  }
+
+  // Fallback to the generic keyword check for cases with no explicit
+  // dollar figures in the text at all (e.g. "what's your budget?" with
+  // nothing proposed yet -- though the system prompt already says not to
+  // use SUGGEST for a genuinely open question like that, this covers the
+  // case where it's borderline).
+  const asksAboutBudget = /\b(budget|price range)\b/i.test(reply);
+  if (asksAboutBudget && found.length === 0) {
     return reply + '\n[SUGGEST: $1M - $2M | $2M - $5M | $5M - $10M | $10M+]';
   }
   return reply;

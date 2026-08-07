@@ -845,6 +845,13 @@ const conciergeLinkMap = [
 ];
 function linkify(text) {
   let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Convert basic markdown bold (**text**) into real <strong> tags -- the
+  // AI naturally reaches for this formatting sometimes, but nothing was
+  // rendering it, so it showed up as literal asterisks in the chat. Safe
+  // to do here since it runs after < and > are already escaped above, so
+  // this can't be used to inject arbitrary HTML, only wrap plain text in
+  // a fixed, trusted tag.
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   const used = new Set();
   for (const [pattern, href] of conciergeLinkMap) {
     if (used.has(href)) continue; // only link the first mention of a given page per reply
