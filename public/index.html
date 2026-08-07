@@ -408,7 +408,7 @@
       <p class="text-sm text-navy/60 mb-5">Tell us a bit about you and a Florida luxury specialist will follow up.</p>
       <div class="space-y-3">
         <input id="lead-name" type="text" placeholder="Full name" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
-        <input id="lead-email" type="email" placeholder="Email address" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
+        <input id="lead-email" type="email" placeholder="Email address (optional)" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
         <input id="lead-phone" type="tel" placeholder="Phone number" class="w-full border border-navy/20 rounded-sm px-4 py-2.5 text-sm focus:outline-none focus:border-gold">
         <p class="text-xs text-navy/40 leading-snug">By submitting, you consent to be contacted by Bharath Kadiyala / Dalton Wade Real Estate Group by phone, text, and email regarding your real estate inquiry, including by automated means. Consent is not a condition of purchase. See our <a href="legal/privacy-policy.html" class="underline hover:text-gold-dim" target="_blank">Privacy Policy</a>.</p>
         <button onclick="submitLead()" class="w-full bg-navy text-sand py-3 rounded-sm text-sm font-medium hover:bg-navy-card transition">Submit</button>
@@ -1049,8 +1049,8 @@ function renderInlineCapture(log, prefillPhone, prefillEmail) {
     <div id="${id}" class="bg-navy-card border border-gold/30 rounded-md p-3 space-y-2">
       <p class="text-sand/70 text-xs">${promptText}</p>
       <input id="${id}-name" type="text" placeholder="Full name" class="w-full bg-navy border border-navy-line rounded-full px-3 py-2 text-sand text-sm focus:outline-none focus:border-gold">
-      <input id="${id}-email" type="email" placeholder="Email address" value="${prefillEmail || ''}" class="w-full bg-navy border border-navy-line rounded-full px-3 py-2 text-sand text-sm focus:outline-none focus:border-gold">
-      <input id="${id}-phone" type="tel" placeholder="Phone (optional)" value="${prefillPhone || ''}" class="w-full bg-navy border border-navy-line rounded-full px-3 py-2 text-sand text-sm focus:outline-none focus:border-gold">
+      <input id="${id}-email" type="email" placeholder="Email address (optional)" value="${prefillEmail || ''}" class="w-full bg-navy border border-navy-line rounded-full px-3 py-2 text-sand text-sm focus:outline-none focus:border-gold">
+      <input id="${id}-phone" type="tel" placeholder="Phone number" value="${prefillPhone || ''}" class="w-full bg-navy border border-navy-line rounded-full px-3 py-2 text-sand text-sm focus:outline-none focus:border-gold">
       <button onclick="submitInlineCapture('${id}')" class="w-full bg-gold text-navy font-medium rounded-full py-2 text-sm hover:bg-gold-light transition">${buttonText}</button>
       <p id="${id}-status" class="text-xs text-sand/40 text-center"></p>
     </div>`);
@@ -1062,9 +1062,37 @@ async function submitInlineCapture(id) {
   const email = document.getElementById(`${id}-email`).value;
   const phone = document.getElementById(`${id}-phone`).value;
   const status = document.getElementById(`${id}-status`);
-  if (!name || !email) { status.textContent = 'Please enter your name and email.'; return; }
+  if (!name || (!email && !phone)) { status.textContent = 'Please enter your name and a phone number or email.'; return; }
   status.textContent = 'Sending...';
+
+  // Enrich the lead with the full structured buyer profile built up over
+  // the conversation -- both the searchable filters (city, price, beds,
+  // property type) and the qualitative facts learned along the way
+  // (lifestyle, dock needs, timeline, etc.), not just a raw transcript
+  // excerpt. Whoever follows up should start already knowing what this
+  // person wants, not have to re-read the conversation to piece it
+  // together.
+  const profile = getSharedSearchState();
+  const profileLines = [];
+  if (profile.city) profileLines.push(`City: ${profile.city}`);
+  if (profile.minPrice || profile.maxPrice) {
+    const min = profile.minPrice ? `$${Number(profile.minPrice).toLocaleString('en-US')}` : 'Any';
+    const max = profile.maxPrice ? `$${Number(profile.maxPrice).toLocaleString('en-US')}` : 'Any';
+    profileLines.push(`Price range: ${min} - ${max}`);
+  }
+  if (profile.beds) profileLines.push(`Minimum bedrooms: ${profile.beds}`);
+  if (profile.propertyType) profileLines.push(`Property type: ${profile.propertyType}`);
+  if (profile.intent) profileLines.push(`Intent: ${profile.intent}`);
+  if (profile.lifestyle) profileLines.push(`Lifestyle priority: ${profile.lifestyle}`);
+  if (profile.dock) profileLines.push(`Dock/boating needs: ${profile.dock}`);
+  if (profile.timeline) profileLines.push(`Timeline: ${profile.timeline}`);
+  if (profile.clubInterest) profileLines.push(`Club interest: ${profile.clubInterest}`);
+  if (profile.construction) profileLines.push(`Construction preference: ${profile.construction}`);
+  if (profile.financing) profileLines.push(`Financing: ${profile.financing}`);
+
   const conversationSummary = chatHistory.slice(-6).map(m => `${m.role === 'user' ? 'Visitor' : 'Concierge'}: ${m.content}`).join('\n');
+  const fullMessage = (profileLines.length ? `BUYER PROFILE:\n${profileLines.join('\n')}\n\nRECENT CONVERSATION:\n` : '') + conversationSummary;
+
   // Tag as a seller lead (correctly routed to kvCORE's Seller deal type,
   // same as the existing "Request a valuation" button elsewhere on the
   // site) when the conversation established seller intent -- not lumped
@@ -1074,7 +1102,7 @@ async function submitInlineCapture(id) {
     const res = await fetch('/api/lead', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, phone, source: leadSource, site: 'luxuryredefinedpb.com', message: conversationSummary })
+      body: JSON.stringify({ name, email, phone, source: leadSource, site: 'luxuryredefinedpb.com', message: fullMessage })
     });
     if (!res.ok) throw new Error('failed');
     conciergeLeadCaptured = true;
@@ -1161,7 +1189,7 @@ async function submitLead() {
   const message = leadContextMessage;
   const lead = { name, email, phone, source: leadSource, site: 'luxuryredefinedpb.com', message };
   const status = document.getElementById('lead-status');
-  if (!lead.name || !lead.email) { status.textContent = 'Please enter your name and email.'; return; }
+  if (!lead.name || (!lead.email && !lead.phone)) { status.textContent = 'Please enter your name and a phone number or email.'; return; }
   status.textContent = 'Submitting...';
   try {
     const res = await fetch('/api/lead', {

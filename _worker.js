@@ -89,12 +89,12 @@ async function handleLead(request, env) {
     return json({ error: 'Invalid request body' }, 400);
   }
 
-  if (!lead.name || !lead.email) {
-    return json({ error: 'Name and email are required' }, 400);
+  if (!lead.name || (!lead.email && !lead.phone)) {
+    return json({ error: 'Name and at least one contact method (email or phone) are required' }, 400);
   }
 
   const name = String(lead.name).slice(0, 200);
-  const email = String(lead.email).slice(0, 200);
+  const email = String(lead.email || 'Not provided').slice(0, 200);
   const phone = String(lead.phone || 'Not provided').slice(0, 60);
   const source = String(lead.source || 'buyer').slice(0, 60);
   const site = String(lead.site || 'luxuryredefined.homes').slice(0, 200);
@@ -155,7 +155,7 @@ async function handleLead(request, env) {
         Authorization: `Bearer ${env.RESEND_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ from: fromAddress, to: [toAddress], reply_to: email, subject, text })
+      body: JSON.stringify({ from: fromAddress, to: [toAddress], ...(lead.email ? { reply_to: email } : {}), subject, text })
     });
 
     if (!res.ok) {
@@ -207,7 +207,7 @@ async function pushToKvCore(lead, env) {
   const text = [
     `First Name: ${firstName}`,
     `Last Name: ${lastName}`,
-    `Email: ${lead.email}`,
+    `Email: ${lead.email || ''}`,
     `Phone: ${lead.phone && lead.phone !== 'Not provided' ? lead.phone : ''}`,
     `Deal Type: ${dealType}`,
     `Source: Luxury Redefined Palm Beach website`,
@@ -1604,6 +1604,25 @@ async function handleConcierge(request, env) {
       searchResult = await queryResoWithCache(env, toolUseBlock.input || {}, 6, 0);
     } catch (err) {
       searchResult = { listings: [], total: 0, error: String(err) };
+    }
+
+    // Deterministic check, not just a prompt instruction: a genuine
+    // technical failure (network issue, Spark API outage) must never be
+    // presented as "nothing's currently on the market" -- those are two
+    // completely different situations, and conflating them is misleading
+    // in the opposite direction from the luxury-range check below (that
+    // one prevents implying false scarcity; this one prevents implying a
+    // false "nothing available" when the search simply didn't run). Return
+    // this before ever reaching the second AI call, so the AI can't
+    // accidentally narrate a failed search as a real market condition.
+    if (searchResult.error) {
+      console.log('Concierge search failed:', searchResult.error);
+      return json({
+        reply: "I'm having trouble reaching our live listings system right now -- that's a temporary technical issue, not a reflection of what's actually on the market. Please try again in a moment, or I can connect you with a specialist directly.",
+        listings: [],
+        searchParams: toolUseBlock.input || {},
+        searchFailed: true
+      });
     }
 
     // Deterministic override, not just a prompt instruction: a search below
