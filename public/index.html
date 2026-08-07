@@ -923,7 +923,9 @@ async function sendChat() {
     const res = await fetch('/api/concierge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, history: chatHistory, searchContext: getSharedSearchState() })
+      body: JSON.stringify({ message: text, history: chatHistory, searchContext: getSharedSearchState(), lastShownListings: (() => {
+        try { return JSON.parse(sessionStorage.getItem('concierge-last-shown') || '[]'); } catch { return []; }
+      })() })
     });
     const data = await res.json();
     const thinkingEl = document.getElementById(thinkingId);
@@ -1040,6 +1042,31 @@ async function sendChat() {
             : '');
         log.insertAdjacentHTML('beforeend', cardsHtml);
         log.scrollTop = log.scrollHeight;
+
+        // Remember the listings actually shown, using the same compact
+        // fields already sent to the AI for reasoning (not the full raw
+        // Media-heavy objects) -- so a later "compare these" or "tell me
+        // more about #2" can reference real, specific data instead of the
+        // AI having to guess or re-search from scratch. Overwritten each
+        // time (not merged), since "these" should always mean the most
+        // recently shown set, not an accumulation of everything ever shown.
+        try {
+          const compact = shown.map(l => ({
+            address: l.UnparsedAddress || [l.City, l.StateOrProvince].filter(Boolean).join(', '),
+            price: l.ListPrice,
+            beds: l.BedroomsTotal,
+            baths: l.BathroomsTotalInteger,
+            sqft: l.LivingArea,
+            waterfront: l.WaterfrontYN === true,
+            subdivision: l.SubdivisionName || null,
+            daysOnMarket: typeof l.DaysOnMarket === 'number' ? l.DaysOnMarket : null,
+            hoaPerMonth: l.AssociationFee
+              ? `$${Number(l.AssociationFee).toLocaleString('en-US')}${l.AssociationFeeFrequency ? ' ' + l.AssociationFeeFrequency.toLowerCase() : ''}`
+              : null,
+            propertyType: l.PropertySubType || l.PropertyType || null
+          }));
+          sessionStorage.setItem('concierge-last-shown', JSON.stringify(compact));
+        } catch { /* storage unavailable -- comparison just won't have remembered data */ }
       }
       // Feed back what the concierge actually searched with, so a manual
       // search on listings.html afterward starts from the same criteria

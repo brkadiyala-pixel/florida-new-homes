@@ -1582,6 +1582,29 @@ async function handleConcierge(request, env) {
     }
   }
 
+  // Compare/detail follow-ups: the person can only see rendered property
+  // cards in the chat, not structured data -- without this, a later
+  // "compare these" or "tell me more about #2" would have nothing real to
+  // work from, since only rendered text (not the underlying listing data)
+  // normally persists between turns. This is the exact same compact data
+  // already sent to the AI when the listings were first shown, remembered
+  // for one more turn.
+  const lastShown = Array.isArray(body.lastShownListings) ? body.lastShownListings.slice(0, 3) : [];
+  if (lastShown.length) {
+    const described = lastShown.map((l, i) => {
+      const parts = [`#${i + 1}: ${l.address || 'address unavailable'}`, `$${Number(l.price || 0).toLocaleString('en-US')}`];
+      if (l.beds) parts.push(`${l.beds} bed`);
+      if (l.baths) parts.push(`${l.baths} bath`);
+      if (l.sqft) parts.push(`${Number(l.sqft).toLocaleString('en-US')} sqft`);
+      if (l.waterfront) parts.push('waterfront');
+      if (l.subdivision) parts.push(l.subdivision);
+      if (l.daysOnMarket != null) parts.push(`${l.daysOnMarket} days on market`);
+      if (l.hoaPerMonth) parts.push(`HOA ${l.hoaPerMonth}`);
+      return parts.join(', ');
+    }).join('\n');
+    systemPrompt += `\n\nYou just showed the visitor these specific listings, in this order (#1, #2, #3 refers to their position as shown, not an MLS number):\n${described}\nIf they ask to compare these, or ask about "the second one" or similar, answer using these exact real details -- don't invent anything beyond what's listed here. If they ask about something not covered here (like interior photos or a feature not listed), say you don't have that detail rather than guessing, and offer to connect them with a specialist or link to the full listing page for more.`;
+  }
+
   const messages = [...history, { role: 'user', content: message }];
 
   try {
