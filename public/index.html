@@ -1168,6 +1168,7 @@ async function submitInlineCapture(id) {
   if (profile.clubInterest) profileLines.push(`Club interest: ${profile.clubInterest}`);
   if (profile.construction) profileLines.push(`Construction preference: ${profile.construction}`);
   if (profile.financing) profileLines.push(`Financing: ${profile.financing}`);
+  if (profile.sellingGoal) profileLines.push(`Selling goal: ${profile.sellingGoal}`);
 
   const conversationSummary = chatHistory.slice(-6).map(m => `${m.role === 'user' ? 'Visitor' : 'Concierge'}: ${m.content}`).join('\n');
   const fullMessage = (profileLines.length ? `BUYER PROFILE:\n${profileLines.join('\n')}\n\nRECENT CONVERSATION:\n` : '') + conversationSummary;
