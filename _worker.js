@@ -377,7 +377,21 @@ const RESO_SELECT_FIELDS = [
 
 function buildResoFilter({ city, minPrice, maxPrice, beds, propertyType, subdivision, address }) {
   const filters = [`StandardStatus eq 'Active'`];
-  if (city) filters.push(`City eq '${city.replace(/'/g, "''")}'`);
+  if (city) {
+    filters.push(`City eq '${city.replace(/'/g, "''")}'`);
+  } else if (!subdivision && !address) {
+    // No city given, and this isn't a specific-community lookup (which
+    // already pins down a real place via subdivision/address) -- constrain
+    // to the actual service area instead of leaving the search
+    // unconstrained across the entire MLS coverage area. Without this, a
+    // generic "home under $2M" search could surface a real listing from
+    // somewhere like Wellington or Loxahatchee -- technically on the same
+    // MLS feed, but not a place this brokerage serves or has any real
+    // expertise discussing.
+    const serviceAreaCities = ['Palm Beach', 'West Palm Beach', 'Jupiter', 'Boca Raton', 'Manalapan', 'Delray Beach'];
+    const cityFilter = serviceAreaCities.map(c => `City eq '${c}'`).join(' or ');
+    filters.push(`(${cityFilter})`);
+  }
   if (minPrice) filters.push(`ListPrice ge ${Number(minPrice)}`);
   if (maxPrice) filters.push(`ListPrice le ${Number(maxPrice)}`);
   if (beds) filters.push(`BedroomsTotal ge ${Number(beds)}`);
