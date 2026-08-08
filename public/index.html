@@ -942,7 +942,7 @@ async function sendChat() {
     const res = await fetch('/api/concierge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, history: chatHistory, searchContext: getSharedSearchState(), lastShownListings: (() => {
+      body: JSON.stringify({ message: text, history: chatHistory, searchContext: getSharedSearchState(), leadCaptured: conciergeLeadCaptured, followUpOffered: conciergeFollowUpOffered, lastShownListings: (() => {
         try { return JSON.parse(sessionStorage.getItem('concierge-last-shown') || '[]'); } catch { return []; }
       })() })
     });
@@ -990,6 +990,16 @@ async function sendChat() {
     if (reply.includes('[INTENT: private-match]')) {
       conciergeDetectedPrivateMatchIntent = true;
       reply = reply.replace('[INTENT: private-match]', '').trim();
+    }
+
+    // Parse the follow-up-offered marker -- once a low-pressure "would it
+    // help to have a specialist follow up" offer has been made (triggered
+    // deterministically after 6 real exchanges without a capture), never
+    // make that same offer again this conversation, whether or not they
+    // accepted it.
+    if (reply.includes('[FOLLOWUP_OFFERED]')) {
+      conciergeFollowUpOffered = true;
+      reply = reply.replace('[FOLLOWUP_OFFERED]', '').trim();
     }
 
     // Parse the structured buyer memory marker: "[PROFILE: {...}]" -- a
@@ -1144,6 +1154,7 @@ async function sendChat() {
 let conciergeLeadCaptured = false;
 let conciergeDetectedSellerIntent = false;
 let conciergeDetectedPrivateMatchIntent = false;
+let conciergeFollowUpOffered = false;
 function renderInlineCapture(log, prefillPhone, prefillEmail) {
   const id = 'inline-capture-' + Date.now();
   const promptText = conciergeDetectedSellerIntent
@@ -1242,6 +1253,8 @@ function saveConciergeSession() {
     sessionStorage.setItem('concierge-log-html', document.getElementById('chat-log').innerHTML);
     sessionStorage.setItem('concierge-lead-captured', conciergeLeadCaptured ? '1' : '0');
     sessionStorage.setItem('concierge-seller-intent', conciergeDetectedSellerIntent ? '1' : '0');
+    sessionStorage.setItem('concierge-private-match-intent', conciergeDetectedPrivateMatchIntent ? '1' : '0');
+    sessionStorage.setItem('concierge-followup-offered', conciergeFollowUpOffered ? '1' : '0');
   } catch (e) { /* storage unavailable — fail silently, conversation just won't persist */ }
 }
 function restoreConciergeSession() {
@@ -1253,6 +1266,8 @@ function restoreConciergeSession() {
       document.getElementById('chat-log').innerHTML = savedLog;
       conciergeLeadCaptured = sessionStorage.getItem('concierge-lead-captured') === '1';
       conciergeDetectedSellerIntent = sessionStorage.getItem('concierge-seller-intent') === '1';
+      conciergeDetectedPrivateMatchIntent = sessionStorage.getItem('concierge-private-match-intent') === '1';
+      conciergeFollowUpOffered = sessionStorage.getItem('concierge-followup-offered') === '1';
       const starterChips = document.getElementById('starter-chips');
       if (starterChips) starterChips.style.display = 'none';
     }

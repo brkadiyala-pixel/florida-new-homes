@@ -1685,6 +1685,24 @@ async function handleConcierge(request, env) {
   // fake search filters, since things like "dock" or "boat size" aren't
   // backed by confirmed MLS fields.
   let systemPrompt = SYSTEM_PROMPT;
+
+  // Engagement-based follow-up offer: a long, genuinely engaged
+  // conversation (asking about clubs, communities, market conditions) can
+  // go on indefinitely without ever hitting the existing capture triggers,
+  // since those all depend on the person disclosing their OWN specific
+  // criteria (a budget, a city, a timeline). Someone who just keeps asking
+  // good questions is still a real prospect. Counted deterministically
+  // from the actual message history here, not left to the AI to track a
+  // running turn count itself -- "count to N turns and then act" is
+  // exactly the kind of mechanical counting task that hasn't held up
+  // reliably from a prompt instruction alone elsewhere tonight (the
+  // budget-button and $1M-threshold gaps were the same shape of problem).
+  const userTurnCount = history.filter(m => m.role === 'user').length + 1; // +1 for the current message
+  const alreadyCapturedOrOffered = body.leadCaptured === true || body.followUpOffered === true;
+  if (userTurnCount >= 6 && !alreadyCapturedOrOffered) {
+    systemPrompt += `\n\nThis conversation has gone on for a while without the person sharing their own specific budget, city, or timeline -- but sustained engagement like this is still a real prospect, not nothing. In this reply, make ONE soft, easy-to-decline offer to send them tailored recommendations or connect with a specialist based on what you've discussed -- something like asking if it would help to have a specialist follow up given what they've been asking about. Keep it low-pressure and brief, not a hard sell. If they've already been asked once this session (they have not, this is the first time), don't repeat it. End this reply with the exact marker "[FOLLOWUP_OFFERED]" on its own line (after SUGGEST/INTENT/PROFILE if present, before CAPTURE_LEAD) so the site knows not to make this same offer again later in this conversation, whether or not they accept it. Never mention this marker to the person.`;
+  }
+
   const searchContext = body.searchContext && typeof body.searchContext === 'object' ? body.searchContext : null;
   if (searchContext) {
     const searchable = [];
