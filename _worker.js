@@ -112,6 +112,61 @@ function requireAdminAuth() {
   });
 }
 
+// Deterministic lead scoring -- computed entirely in code from real signals
+// already available at submission time, never from an AI self-assessment
+// (matching the reliability lesson from everything else built tonight: a
+// prompt-based "rate this lead 1-100" would be inconsistent and unverifiable,
+// while this is auditable and reproducible). Point values match the
+// strategy document's own scoring table. Gracefully handles a missing
+// buyerProfile -- not every lead source (contact page, notify-me buttons)
+// has one -- by simply not awarding those points rather than guessing.
+function scoreLead(lead, messageBody) {
+  const profile = lead.buyerProfile && typeof lead.buyerProfile === 'object' ? lead.buyerProfile : {};
+  const reasons = [];
+  let score = 0;
+
+  const add = (points, reason) => { score += points; reasons.push(`+${points} ${reason}`); };
+
+  if (profile.minPrice || profile.maxPrice) add(15, 'budget provided');
+  const maxNum = Number(profile.maxPrice || profile.minPrice);
+  if (Number.isFinite(maxNum) && maxNum >= 3000000) add(10, '$3M+ budget');
+  if (profile.city) add(10, 'specific area named');
+  if (profile.propertyType) add(10, 'property type specified');
+
+  // Timeline is free text (e.g. "3-6 months", "ASAP", "next year") -- best-
+  // effort parse, not a structured field. Treat an explicit short number of
+  // months, or urgency words, as "under 6 months"; treat "year"/"next
+  // year" as longer-term. Genuinely ambiguous text just doesn't score here
+  // rather than guessing either way.
+  if (profile.timeline) {
+    const t = profile.timeline.toLowerCase();
+    const monthMatch = t.match(/(\d+)\s*(?:-\s*(\d+)\s*)?month/);
+    const shortTimeline = /asap|immediately|right away/.test(t) ||
+      (monthMatch && Number(monthMatch[2] || monthMatch[1]) <= 6);
+    const longTimeline = /year|12\+?\s*month/.test(t);
+    if (shortTimeline && !longTimeline) add(20, 'timeline under 6 months');
+  }
+
+  if (lead.phone && String(lead.phone).trim() && lead.phone !== 'Not provided') add(20, 'phone provided');
+  if (lead.isReturningVisitor === true) add(10, 'returning visitor');
+
+  const msg = (messageBody || '').toLowerCase();
+  if (/\bshowing\b|\btour\b|see it in person|view.*in person/.test(msg)) add(30, 'requested a showing');
+  if (lead.source === 'off-market' || /off.market|pocket listing/.test(msg)) add(25, 'off-market interest');
+  if (String(lead.source || '').startsWith('Interested in')) add(15, 'asked about a specific property');
+  if (lead.source === 'seller' && /\d+\s+[a-z].*\b(st|street|ave|avenue|dr|drive|rd|road|blvd|boulevard|ln|lane|way|ct|court|pl|place)\b/i.test(messageBody || '')) {
+    add(25, 'seller provided property address');
+  }
+
+  let tier;
+  if (score >= 76) tier = 'Concierge priority';
+  else if (score >= 51) tier = 'High intent';
+  else if (score >= 26) tier = 'Qualified';
+  else tier = 'Exploring';
+
+  return { score, tier, reasons };
+}
+
 async function handleLead(request, env) {
   let lead;
   try {
@@ -161,12 +216,16 @@ async function handleLead(request, env) {
     timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short'
   }) + ' ET';
 
+  const { score, tier, reasons } = scoreLead(lead, messageBody);
+
   const subject = isHot
-    ? `🔥 HOT LEAD — ${name} (${sourceLabels[source] || source})`
-    : `New inquiry — ${name}`;
+    ? `🔥 HOT LEAD (${tier}, ${score}) — ${name} (${sourceLabels[source] || source})`
+    : `New inquiry (${tier}, ${score}) — ${name}`;
 
   const text = [
     isHot ? `🔥 HOT LEAD — respond quickly` : `New website inquiry`,
+    `Lead score: ${score} -- ${tier}`,
+    reasons.length ? `Scored on: ${reasons.join(', ')}` : `Scored on: no specific signals detected yet`,
     `Submitted: ${submittedAt}`,
     `Source: ${sourceLabels[source] || source}`,
     ``,

@@ -705,6 +705,25 @@ async function runIDXSearch() {
    ===================================================================== */
 let chatHistory = [];
 
+// Returning-visitor detection for lead scoring, using localStorage (not
+// sessionStorage) specifically because it persists across browser
+// sessions/tabs, not just within one visit. A lightweight, honest signal
+// -- not full visitor tracking or analytics, just "has this browser been
+// here before."
+function isReturningVisitor() {
+  try {
+    const seen = localStorage.getItem('luxury-visitor-seen');
+    if (!seen) {
+      localStorage.setItem('luxury-visitor-seen', '1');
+      return false;
+    }
+    return true;
+  } catch {
+    return false; // storage unavailable -- default to false rather than guessing
+  }
+}
+const wasReturningVisitor = isReturningVisitor(); // captured once per page load, before this visit's own flag-set affects it
+
 // ============================================================
 // SHARED SEARCH STATE (Phase 1 foundation)
 // Identical to the helpers on listings.html -- both pages read/write the
@@ -1162,7 +1181,7 @@ async function submitInlineCapture(id) {
     const res = await fetch('/api/lead', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, phone, source: leadSource, site: 'luxuryredefinedpb.com', message: fullMessage })
+      body: JSON.stringify({ name, email, phone, source: leadSource, site: 'luxuryredefinedpb.com', message: fullMessage, buyerProfile: profile, isReturningVisitor: wasReturningVisitor })
     });
     if (!res.ok) throw new Error('failed');
     conciergeLeadCaptured = true;
