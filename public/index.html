@@ -983,6 +983,15 @@ async function sendChat() {
       reply = reply.replace('[INTENT: seller]', '').trim();
     }
 
+    // Parse the private-match intent marker -- once seen, the eventual
+    // capture form should tag the lead as 'off-market' (Private Match
+    // request), not the generic buyer path, so it's scored and labeled
+    // consistently with the rest of the off-market/pocket-listing flow.
+    if (reply.includes('[INTENT: private-match]')) {
+      conciergeDetectedPrivateMatchIntent = true;
+      reply = reply.replace('[INTENT: private-match]', '').trim();
+    }
+
     // Parse the structured buyer memory marker: "[PROFILE: {...}]" -- a
     // small JSON object of qualitative facts the AI just learned
     // (lifestyle, dock needs, timeline, etc.), merged into the same shared
@@ -1118,12 +1127,19 @@ async function sendChat() {
    conversation to be captured. Shown at most once per session. */
 let conciergeLeadCaptured = false;
 let conciergeDetectedSellerIntent = false;
+let conciergeDetectedPrivateMatchIntent = false;
 function renderInlineCapture(log, prefillPhone, prefillEmail) {
   const id = 'inline-capture-' + Date.now();
   const promptText = conciergeDetectedSellerIntent
     ? 'Share your name and best contact so we can prepare your property valuation:'
-    : 'Share your name and best contact so a specialist can follow up:';
-  const buttonText = conciergeDetectedSellerIntent ? 'Request my valuation' : 'Connect me with a specialist';
+    : conciergeDetectedPrivateMatchIntent
+      ? 'Share your name and best contact so we can start your Private Match search:'
+      : 'Share your name and best contact so a specialist can follow up:';
+  const buttonText = conciergeDetectedSellerIntent
+    ? 'Request my valuation'
+    : conciergeDetectedPrivateMatchIntent
+      ? 'Start my Private Match'
+      : 'Connect me with a specialist';
   log.insertAdjacentHTML('beforeend', `
     <div id="${id}" class="bg-navy-card border border-gold/30 rounded-md p-3 space-y-2">
       <p class="text-sand/70 text-xs">${promptText}</p>
@@ -1177,7 +1193,11 @@ async function submitInlineCapture(id) {
   // same as the existing "Request a valuation" button elsewhere on the
   // site) when the conversation established seller intent -- not lumped
   // in as a generic buyer inquiry.
-  const leadSource = conciergeDetectedSellerIntent ? 'seller' : 'concierge-inline';
+  const leadSource = conciergeDetectedSellerIntent
+    ? 'seller'
+    : conciergeDetectedPrivateMatchIntent
+      ? 'off-market'
+      : 'concierge-inline';
   try {
     const res = await fetch('/api/lead', {
       method: 'POST',
