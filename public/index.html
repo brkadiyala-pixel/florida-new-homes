@@ -1066,7 +1066,23 @@ async function sendChat() {
           return badge + renderIdxCard(listing);
         }).join('')}</div>` +
           (data.listings.length > 3
-            ? `<a href="/listings.html" class="block text-center text-sand/70 text-xs mt-2 hover:text-gold transition">View all ${data.listings.length} homes →</a>`
+            ? (() => {
+                // "View all X homes" must carry the same search forward, not
+                // drop it -- landing on listings.html with no params meant
+                // the person saw a completely unrelated default search
+                // (arbitrary price/city) instead of the rest of what they
+                // were just looking at. Same URL param names listings.html's
+                // own applyUrlParams() already reads.
+                const p = data.searchParams || {};
+                const params = new URLSearchParams();
+                if (p.city) params.set('city', p.city);
+                if (p.minPrice) params.set('minPrice', p.minPrice);
+                if (p.maxPrice) params.set('maxPrice', p.maxPrice);
+                if (p.beds) params.set('beds', p.beds);
+                if (p.propertyType) params.set('propertyType', p.propertyType);
+                const qs = params.toString();
+                return `<a href="/listings.html${qs ? '?' + qs : ''}" class="block text-center text-sand/70 text-xs mt-2 hover:text-gold transition">View all ${data.listings.length} homes →</a>`;
+              })()
             : '');
         log.insertAdjacentHTML('beforeend', cardsHtml);
         log.scrollTop = log.scrollHeight;
