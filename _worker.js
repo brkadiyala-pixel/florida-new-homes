@@ -1722,7 +1722,24 @@ async function handleConcierge(request, env) {
     }
 
     const firstData = await firstRes.json();
-    const toolUseBlock = (firstData.content || []).find(b => b.type === 'tool_use' && b.name === 'search_listings');
+    let toolUseBlock = (firstData.content || []).find(b => b.type === 'tool_use' && b.name === 'search_listings');
+
+    // Deterministic guard, not just a prompt instruction: a message with
+    // clear, explicit selling intent should never trigger a live buyer
+    // search, full stop -- confirmed by a real case where the AI's own
+    // text correctly asked about the seller's property while a
+    // search_listings tool call still fired in the same turn, showing an
+    // unrelated buyer listing card right under a seller-focused reply.
+    // Narrow phrasing on purpose (not just the word "sell" anywhere) to
+    // avoid false-positives on a legitimate buyer message that happens to
+    // mention selling in some other context, e.g. "I need to sell my
+    // current home before I can buy" is still primarily a buyer message
+    // here and shouldn't get blocked.
+    const clearSellerIntent = /\b(want to sell|sell my (house|home|property|condo)|selling my (house|home|property|condo)|list my (house|home|property))\b/i.test(message);
+    if (clearSellerIntent && toolUseBlock) {
+      console.log('Seller guard: ignored a search_listings call on a clear seller message');
+      toolUseBlock = null;
+    }
 
     // No tool call -- plain conversational reply, same as before.
     if (!toolUseBlock) {
