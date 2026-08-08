@@ -381,7 +381,20 @@ function buildResoFilter({ city, minPrice, maxPrice, beds, propertyType, subdivi
   if (minPrice) filters.push(`ListPrice ge ${Number(minPrice)}`);
   if (maxPrice) filters.push(`ListPrice le ${Number(maxPrice)}`);
   if (beds) filters.push(`BedroomsTotal ge ${Number(beds)}`);
-  if (propertyType === 'Condominium' || propertyType === 'Condo') filters.push(`PropertyType eq 'Condominium'`);
+  if (propertyType === 'Condominium' || propertyType === 'Condo') {
+    // Testing both fields, not just PropertyType alone -- RESO convention
+    // typically has PropertyType as a broad category (Residential, Land,
+    // Commercial) with the specific type living in PropertySubType, and
+    // this codebase's own listing-display code already treats
+    // PropertySubType as authoritative (see the enriched summary further
+    // down: `l.PropertySubType || l.PropertyType`). Testing PropertyType
+    // alone here risked silently zeroing out every condo-specific search
+    // sitewide if that's not actually where 'Condominium' is stored --
+    // exactly the same silent-failure shape as the tolower() bug found
+    // earlier. OR-ing both fields is safe regardless of which one BeachesMLS
+    // actually uses for this value.
+    filters.push(`(PropertyType eq 'Condominium' or PropertySubType eq 'Condominium')`);
+  }
   if (propertyType === 'Waterfront') filters.push(`WaterfrontYN eq true`);
   if (propertyType === 'Golf community') {
     // No standard MLS field marks "golf community" directly. Best-effort
